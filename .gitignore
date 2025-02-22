@@ -1,0 +1,24 @@
+# Ignore executables and compiled binaries
+*.exe
+*.out
+*.dll
+*.so
+*.dylib
+
+# Ignore Go module files and dependencies
+/bin/
+/pkg/
+/vendor/
+
+# Ignore build artifacts
+*.log
+*.test
+*.cache
+
+# Ignore IDE/editor-specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
