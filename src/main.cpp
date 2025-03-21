@@ -70,4 +70,4 @@ int main() {
 }
     
     //Command for running
-    //g++ -std=c++11 -Iinclude src/main.cpp src/storage/catalog.cpp src/storage/bptree.cpp src/storage/record.cpp -o main
+    //g++ -std=c++17 -Iinclude src/main.cpp src/storage/catalog.cpp src/storage/bptree.cpp src/storage/record.cpp -o main
