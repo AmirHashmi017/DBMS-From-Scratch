@@ -115,6 +115,9 @@ int main() {
     BPlusTree index("data/users.idx");
     Record user1{1, "Alice", true};
     Record user2{2, "Bob", false};
+    Record user3{3, "Amir", false};
+    Record user4{4, "Ashir", false};
+    Record user5{5, "Ali", false};
 
     std::ofstream data_file("data/users.dat", std::ios::binary | std::ios::app);
     int offset1 = data_file.tellp();
@@ -123,10 +126,24 @@ int main() {
     int offset2 = data_file.tellp();
     std::cout << "Inserting user2 at offset " << offset2 << std::endl;
     user2.serialize(data_file);
+    int offset3 = data_file.tellp();
+    std::cout << "Inserting user3 at offset " << offset3 << std::endl;
+    user3.serialize(data_file);
+    data_file.close();
+    int offset4 = data_file.tellp();
+    std::cout << "Inserting user4 at offset " << offset4 << std::endl;
+    user4.serialize(data_file);
+    data_file.close();
+    int offset5 = data_file.tellp();
+    std::cout << "Inserting user5 at offset " << offset5 << std::endl;
+    user5.serialize(data_file);
     data_file.close();
 
     index.insert(user1.id, offset1);
     index.insert(user2.id, offset2);
+    index.insert(user3.id, offset3);
+    index.insert(user4.id, offset4);
+    index.insert(user5.id, offset5);
 
     // Print catalog
     std::cout << "\nCatalog:\n";
@@ -154,6 +171,7 @@ int main() {
     } else {
         std::cout << "\nNo record found for key " << search_key << std::endl;
     }
-
+    //Command for running
+    //g++ -std=c++11 -Iinclude src/main.cpp src/storage/catalog.cpp src/storage/bptree.cpp src/storage/record.cpp -o main
     return 0;
 }
