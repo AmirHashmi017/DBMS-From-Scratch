@@ -4,16 +4,22 @@
 #include <vector>
 #include <string>
 
+// Enhanced TableSchema in catalog.h
 struct Column {
     std::string name;
-    enum Type { INT, STRING, BOOL } type;
-    int length; // For strings
+    enum Type { INT, FLOAT, STRING, CHAR, BOOL } type;
+    int length; // For strings and chars
+    bool is_primary_key;
+    bool is_foreign_key;
+    std::string references_table;
+    std::string references_column;
 };
 
 struct TableSchema {
     std::string name;
     std::vector<Column> columns;
-    std::string primary_key;
+    std::string data_file_path;
+    std::string index_file_path;
 };
 
 class Catalog {
