@@ -129,11 +129,11 @@ int main() {
     int offset3 = data_file.tellp();
     std::cout << "Inserting user3 at offset " << offset3 << std::endl;
     user3.serialize(data_file);
-    data_file.close();
+    
     int offset4 = data_file.tellp();
     std::cout << "Inserting user4 at offset " << offset4 << std::endl;
     user4.serialize(data_file);
-    data_file.close();
+    
     int offset5 = data_file.tellp();
     std::cout << "Inserting user5 at offset " << offset5 << std::endl;
     user5.serialize(data_file);
