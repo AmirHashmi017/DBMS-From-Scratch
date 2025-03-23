@@ -2,8 +2,13 @@
 #include <iostream>
 
 BPlusTree::BPlusTree(const std::string& index_file) : root_offset(-1) {
+    // Make sure the directory exists before opening the file
+    std::filesystem::path indexPath(index_file);
+    std::filesystem::create_directories(indexPath.parent_path());
+
     file.open(index_file, std::ios::binary | std::ios::in | std::ios::out);
     if (!file) {
+        std::cout << "Creating new index file: " << index_file << std::endl;
         file.clear();
         file.open(index_file, std::ios::binary | std::ios::out | std::ios::trunc); // Create file if it doesn't exist
         file.close();

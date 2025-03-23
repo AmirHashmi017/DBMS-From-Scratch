@@ -1,9 +1,21 @@
-
 #include "database_manager.h"
 #include <iostream>
+#include <filesystem>
 
 int main() {
+    // Ensure data directory exists
+    try {
+        std::filesystem::create_directories("data");
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Warning: Could not create data directory: " << e.what() << std::endl;
+        std::cerr << "Will try with absolute paths instead." << std::endl;
+    }
+
     DatabaseManager db;
+
+    // Output the current working directory for debugging
+    std::cout << "Current working directory: " << std::filesystem::current_path() << std::endl;
 
     // Create a table for users
     db.createTable("users",
@@ -68,6 +80,3 @@ int main() {
 
     return 0;
 }
-
-//Command for running
-//g++ -std=c++17 -Iinclude src/main.cpp src/storage/catalog.cpp src/storage/bptree.cpp src/storage/record.cpp -o main

@@ -1,4 +1,3 @@
-
 #ifndef DATABASE_MANAGER_H
 #define DATABASE_MANAGER_H
 
@@ -7,9 +6,16 @@
 #include <string>
 #include <vector>
 #include <map>
-#include<variant>
+#include <variant>
 #include <fstream>
 #include <iostream>
+#include <filesystem>
+#ifdef _WIN32
+#include <windows.h> // For Windows systems
+#else
+#include <unistd.h> // For Unix systems
+#include <limits.h> // For PATH_MAX
+#endif
 
 // Define a generic record type that can hold different data types
 using FieldValue = std::variant<int, float, std::string, bool>;
@@ -17,7 +23,7 @@ using Record = std::map<std::string, FieldValue>;
 
 class DatabaseManager {
 public:
-    DatabaseManager(const std::string& catalog_path = "data/catalog.bin");
+    DatabaseManager(const std::string& catalog_path = "catalog.bin");
     ~DatabaseManager();
 
     // Create a new table

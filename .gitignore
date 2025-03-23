@@ -1,5 +1,6 @@
 # Ignore executables and compiled binaries
 *.exe
+.vs/
 *.out
 *.dll
 *.so

@@ -1,87 +1,148 @@
 #include "database_manager.h"
-#include <filesystem>
-#include <algorithm>
-#include <stdexcept>
 
-DatabaseManager::DatabaseManager(const std::string& catalog_path) : catalog_path(catalog_path) {
-    // Load the catalog
-    catalog.load(catalog_path);
+// Get the executable path helper function
+std::string getExecutablePath() {
+#ifdef _WIN32
+    char buffer[MAX_PATH];
+    GetModuleFileNameA(NULL, buffer, MAX_PATH);
+    std::string::size_type pos = std::string(buffer).find_last_of("\\/");
+    return std::string(buffer).substr(0, pos);
+#else
+    char buffer[PATH_MAX];
+    ssize_t count = readlink("/proc/self/exe", buffer, PATH_MAX);
+    return std::string(buffer, (count > 0) ? count : 0).substr(0,
+        std::string(buffer).find_last_of("/"));
+#endif
+}
+
+DatabaseManager::DatabaseManager(const std::string& catalog_path_rel) {
+    // Get executable directory and create data directory
+    std::string exePath = getExecutablePath();
+    std::filesystem::path dataDir = std::filesystem::path(exePath) / "data";
+    std::filesystem::create_directories(dataDir);
+
+    // Set absolute path for catalog
+    this->catalog_path = (dataDir / std::filesystem::path(catalog_path_rel).filename()).string();
+
+    std::cout << "Using catalog path: " << this->catalog_path << std::endl;
+
+    // Load the catalog if it exists
+    catalog.load(this->catalog_path);
 
     // Load existing indexes
     loadIndexes();
 }
 
 DatabaseManager::~DatabaseManager() {
-    // Save the catalog
+    // Save catalog
     catalog.save(catalog_path);
 
     // Clean up indexes
-    for (auto& pair : indexes) {
-        delete pair.second;
+    for (auto& [name, index] : indexes) {
+        delete index;
     }
+    indexes.clear();
 }
 
 bool DatabaseManager::createTable(
     const std::string& table_name,
     const std::vector<std::tuple<std::string, std::string, int>>& columns,
     const std::string& primary_key,
-    const std::map<std::string, std::pair<std::string, std::string>>& foreign_keys
-) {
+    const std::map<std::string, std::pair<std::string, std::string>>& foreign_keys) {
+
     // Check if table already exists
     for (const auto& table : catalog.tables) {
         if (table.name == table_name) {
-            std::cerr << "Table '" << table_name << "' already exists." << std::endl;
+            std::cerr << "Table '" << table_name << "' already exists" << std::endl;
             return false;
         }
     }
 
     // Create new table schema
-    TableSchema new_table;
-    new_table.name = table_name;
-    new_table.data_file_path = "data/" + table_name + ".dat";
-    new_table.index_file_path = "data/" + table_name + ".idx";
+    TableSchema table;
+    table.name = table_name;
 
     // Add columns
-    for (const auto& [name, type_str, length] : columns) {
+    for (const auto& [col_name, col_type, col_length] : columns) {
         Column column;
-        column.name = name;
-        column.type = stringToColumnType(type_str);
-        column.length = length;
-        column.is_primary_key = (name == primary_key);
-        column.is_foreign_key = foreign_keys.find(name) != foreign_keys.end();
+        column.name = col_name;
+        column.type = stringToColumnType(col_type);
+        column.length = col_length;
+        column.is_primary_key = (col_name == primary_key);
+        column.is_foreign_key = foreign_keys.find(col_name) != foreign_keys.end();
 
+        // Set references if it's a foreign key
         if (column.is_foreign_key) {
-            auto it = foreign_keys.find(name);
-            column.references_table = it->second.first;
-            column.references_column = it->second.second;
+            const auto& [ref_table, ref_column] = foreign_keys.at(col_name);
+            column.references_table = ref_table;
+            column.references_column = ref_column;
         }
 
-        new_table.columns.push_back(column);
+        table.columns.push_back(column);
     }
 
-    // Validate primary key
-    bool primary_key_found = false;
-    for (const auto& column : new_table.columns) {
+    // Create data and index file paths using the same base directory as catalog
+    std::filesystem::path baseDir = std::filesystem::path(catalog_path).parent_path();
+    table.data_file_path = (baseDir / (table_name + ".dat")).string();
+    table.index_file_path = (baseDir / (table_name + ".idx")).string();
+
+    std::cout << "Creating table files at: " << baseDir << std::endl;
+    std::cout << "  Data file: " << table.data_file_path << std::endl;
+    std::cout << "  Index file: " << table.index_file_path << std::endl;
+
+    // Add table to catalog
+    catalog.tables.push_back(table);
+
+    // Save catalog
+    catalog.save(catalog_path);
+
+    // Create index for primary key
+    createIndex(table);
+
+    return true;
+}
+
+void DatabaseManager::createIndex(const TableSchema& schema) {
+    // Find primary key column
+    Column primary_key_column;
+    bool found = false;
+
+    for (const auto& column : schema.columns) {
         if (column.is_primary_key) {
-            primary_key_found = true;
+            primary_key_column = column;
+            found = true;
             break;
         }
     }
 
-    if (!primary_key_found) {
-        std::cerr << "Primary key '" << primary_key << "' not found in columns." << std::endl;
-        return false;
+    if (!found) {
+        std::cerr << "No primary key found for table '" << schema.name << "'" << std::endl;
+        return;
     }
 
-    // Add the table to the catalog
-    catalog.tables.push_back(new_table);
-    catalog.save(catalog_path);
+    // Make sure the directory exists
+    std::filesystem::path indexPath(schema.index_file_path);
+    std::filesystem::create_directories(indexPath.parent_path());
 
-    // Create index for the table
-    createIndex(new_table);
+    // Create B+ tree index
+    auto* index = new BPlusTree(schema.index_file_path);
+    indexes[schema.name] = index;
+}
 
-    std::cout << "Table '" << table_name << "' created successfully." << std::endl;
-    return true;
+void DatabaseManager::loadIndexes() {
+    for (const auto& table : catalog.tables) {
+        std::cout << "Loading index for table " << table.name << " from " << table.index_file_path << std::endl;
+
+        // Check if the index file exists
+        if (std::filesystem::exists(table.index_file_path)) {
+            auto* index = new BPlusTree(table.index_file_path);
+            indexes[table.name] = index;
+        }
+        else {
+            std::cout << "Index file doesn't exist yet. Will be created on first insert." << std::endl;
+            createIndex(table);
+        }
+    }
 }
 
 bool DatabaseManager::insertRecord(const std::string& table_name, const Record& record) {
@@ -98,54 +159,59 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
     }
 
     if (!found) {
-        std::cerr << "Table '" << table_name << "' not found." << std::endl;
+        std::cerr << "Table '" << table_name << "' not found" << std::endl;
         return false;
     }
 
-    // Validate record against schema
-    for (const auto& column : schema.columns) {
-        if (record.find(column.name) == record.end()) {
-            std::cerr << "Missing value for column '" << column.name << "'." << std::endl;
-            return false;
-        }
-
-        // Type checking could be added here
-    }
-
-    // Open the data file in append mode
-    std::ofstream data_file(schema.data_file_path, std::ios::binary | std::ios::app);
-    if (!data_file) {
-        std::cerr << "Failed to open data file for table '" << table_name << "'." << std::endl;
-        return false;
-    }
-
-    // Get the current offset
-    int offset = data_file.tellp();
-
-    // Save the record
-    saveRecord(data_file, record, schema, offset);
-    data_file.close();
-
-    // Find the primary key and its value
+    // Get the primary key value
+    int primary_key_value = 0;
     std::string primary_key_column;
-    FieldValue primary_key_value;
 
     for (const auto& column : schema.columns) {
         if (column.is_primary_key) {
             primary_key_column = column.name;
-            primary_key_value = record.at(column.name);
+            if (record.find(primary_key_column) == record.end()) {
+                std::cerr << "Record is missing primary key '" << primary_key_column << "'" << std::endl;
+                return false;
+            }
+
+            if (column.type == Column::INT) {
+                primary_key_value = std::get<int>(record.at(primary_key_column));
+            }
+            else {
+                std::cerr << "Primary key must be an integer" << std::endl;
+                return false;
+            }
+
             break;
         }
     }
 
-    // Insert into index
-    if (indexes.find(table_name) != indexes.end()) {
-        // Convert primary key value to integer (assuming primary keys are int for now)
-        int key_int = std::get<int>(primary_key_value);
-        indexes[table_name]->insert(key_int, offset);
+    // Ensure the index exists
+    if (indexes.find(table_name) == indexes.end()) {
+        createIndex(schema);
     }
 
-    std::cout << "Record inserted into table '" << table_name << "' at offset " << offset << std::endl;
+    // Make sure directories exist
+    std::filesystem::path dataFilePath(schema.data_file_path);
+    std::filesystem::create_directories(dataFilePath.parent_path());
+
+    // Open data file for appending
+    std::ofstream data_file(schema.data_file_path, std::ios::binary | std::ios::app);
+    if (!data_file) {
+        std::cerr << "Failed to open data file: " << schema.data_file_path << std::endl;
+        return false;
+    }
+
+    // Get current position in file (will be the record offset)
+    int offset = data_file.tellp();
+
+    // Save the record
+    saveRecord(data_file, record, schema, offset);
+
+    // Index the record
+    indexes[table_name]->insert(primary_key_value, offset);
+
     return true;
 }
 
@@ -165,65 +231,59 @@ std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name
     }
 
     if (!found) {
-        std::cerr << "Table '" << table_name << "' not found." << std::endl;
+        std::cerr << "Table '" << table_name << "' not found" << std::endl;
+        return results;
+    }
+
+    // Check if the key column is the primary key
+    bool is_primary_key = false;
+    for (const auto& column : schema.columns) {
+        if (column.name == key_column && column.is_primary_key) {
+            is_primary_key = true;
+            break;
+        }
+    }
+
+    // Check if data file exists
+    if (!std::filesystem::exists(schema.data_file_path)) {
+        std::cerr << "Data file not found: " << schema.data_file_path << std::endl;
+        return results;
+    }
+
+    // Open data file for reading
+    std::ifstream data_file(schema.data_file_path, std::ios::binary);
+    if (!data_file) {
+        std::cerr << "Failed to open data file: " << schema.data_file_path << std::endl;
         return results;
     }
 
     // If searching by primary key and index exists, use it
-    if (indexes.find(table_name) != indexes.end()) {
-        bool is_primary_key = false;
-        for (const auto& column : schema.columns) {
-            if (column.name == key_column && column.is_primary_key) {
-                is_primary_key = true;
-                break;
-            }
+    if (is_primary_key && indexes.find(table_name) != indexes.end()) {
+        int key_int = std::get<int>(key_value);
+        auto offsets = indexes[table_name]->search(key_int);
+
+        for (int offset : offsets) {
+            data_file.seekg(offset);
+            results.push_back(loadRecord(data_file, schema));
         }
+    }
+    else {
+        // Sequential scan
+        data_file.seekg(0, std::ios::end);
+        size_t file_size = data_file.tellg();
+        data_file.seekg(0);
 
-        if (is_primary_key) {
-            // Convert primary key value to integer (assuming primary keys are int for now)
-            int key_int = std::get<int>(key_value);
-            std::vector<int> offsets = indexes[table_name]->search(key_int);
+        while (data_file.tellg() < file_size) {
+            size_t record_start = data_file.tellg();
+            Record record = loadRecord(data_file, schema);
 
-            // Load records from the offsets
-            std::ifstream data_file(schema.data_file_path, std::ios::binary);
-            if (!data_file) {
-                std::cerr << "Failed to open data file for table '" << table_name << "'." << std::endl;
-                return results;
-            }
-
-            for (int offset : offsets) {
-                data_file.seekg(offset);
-                Record record = loadRecord(data_file, schema);
+            // Check if this record matches the search criteria
+            if (record.find(key_column) != record.end() && record[key_column] == key_value) {
                 results.push_back(record);
             }
-
-            data_file.close();
-            return results;
         }
     }
 
-    // Otherwise, do a sequential scan
-    std::ifstream data_file(schema.data_file_path, std::ios::binary);
-    if (!data_file) {
-        std::cerr << "Failed to open data file for table '" << table_name << "'." << std::endl;
-        return results;
-    }
-
-    // Read all records and filter
-    while (data_file) {
-        int start_pos = data_file.tellg();
-        if (start_pos == -1) break; // EOF
-
-        Record record = loadRecord(data_file, schema);
-        if (!data_file) break; // EOF or error
-
-        // Check if the record matches the search criteria
-        if (record.find(key_column) != record.end() && record[key_column] == key_value) {
-            results.push_back(record);
-        }
-    }
-
-    data_file.close();
     return results;
 }
 
@@ -241,8 +301,7 @@ TableSchema DatabaseManager::getTableSchema(const std::string& table_name) const
             return table;
         }
     }
-
-    throw std::runtime_error("Table '" + table_name + "' not found.");
+    return TableSchema(); // Empty schema if not found
 }
 
 Column::Type DatabaseManager::stringToColumnType(const std::string& type_str) {
@@ -252,20 +311,31 @@ Column::Type DatabaseManager::stringToColumnType(const std::string& type_str) {
     if (type_str == "char") return Column::CHAR;
     if (type_str == "bool") return Column::BOOL;
 
-    throw std::runtime_error("Unknown column type: " + type_str);
+    // Default to string
+    std::cerr << "Unknown type '" << type_str << "', defaulting to STRING" << std::endl;
+    return Column::STRING;
 }
 
 void DatabaseManager::saveRecord(std::ofstream& file, const Record& record, const TableSchema& schema, int& offset) {
+    // Store current position as record start
     offset = file.tellp();
 
-    // Write each field according to the schema
+    // Write each field according to schema
     for (const auto& column : schema.columns) {
         if (record.find(column.name) != record.end()) {
             serializeField(file, record.at(column.name), column);
         }
         else {
-            // This shouldn't happen if validation is done correctly
-            throw std::runtime_error("Missing field: " + column.name);
+            // Write default value if field is missing
+            FieldValue default_value;
+            switch (column.type) {
+            case Column::INT: default_value = 0; break;
+            case Column::FLOAT: default_value = 0.0f; break;
+            case Column::STRING:
+            case Column::CHAR: default_value = std::string(""); break;
+            case Column::BOOL: default_value = false; break;
+            }
+            serializeField(file, default_value, column);
         }
     }
 }
@@ -273,19 +343,8 @@ void DatabaseManager::saveRecord(std::ofstream& file, const Record& record, cons
 Record DatabaseManager::loadRecord(std::ifstream& file, const TableSchema& schema) {
     Record record;
 
-    // Read each field according to the schema
     for (const auto& column : schema.columns) {
-        try {
-            FieldValue value = deserializeField(file, column);
-            record[column.name] = value;
-        }
-        catch (const std::exception& e) {
-            // If we can't read a complete record, return an empty one
-            if (file.eof()) {
-                return Record();
-            }
-            throw;
-        }
+        record[column.name] = deserializeField(file, column);
     }
 
     return record;
@@ -295,13 +354,10 @@ int DatabaseManager::getFieldSize(const Column& column) const {
     switch (column.type) {
     case Column::INT: return sizeof(int);
     case Column::FLOAT: return sizeof(float);
+    case Column::STRING: return sizeof(int) + column.length; // Length + max chars
+    case Column::CHAR: return column.length;
     case Column::BOOL: return sizeof(bool);
-    case Column::STRING:
-    case Column::CHAR:
-        // Strings have a length field plus the actual string data
-        return sizeof(int) + column.length;
-    default:
-        throw std::runtime_error("Unknown column type");
+    default: return 0;
     }
 }
 
@@ -317,19 +373,25 @@ void DatabaseManager::serializeField(std::ofstream& file, const FieldValue& valu
         file.write(reinterpret_cast<const char*>(&val), sizeof(val));
         break;
     }
+    case Column::STRING: {
+        std::string val = std::get<std::string>(value);
+        // Truncate or pad string to fit column length
+        val.resize(column.length, '\0');
+        int len = val.size();
+        file.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        file.write(val.c_str(), len);
+        break;
+    }
+    case Column::CHAR: {
+        std::string val = std::get<std::string>(value);
+        // Truncate or pad string to fit column length
+        val.resize(column.length, '\0');
+        file.write(val.c_str(), column.length);
+        break;
+    }
     case Column::BOOL: {
         bool val = std::get<bool>(value);
         file.write(reinterpret_cast<const char*>(&val), sizeof(val));
-        break;
-    }
-    case Column::STRING:
-    case Column::CHAR: {
-        std::string val = std::get<std::string>(value);
-        // Truncate or pad the string to the specified length
-        val.resize(column.length, '\0');
-        int len = val.length();
-        file.write(reinterpret_cast<const char*>(&len), sizeof(len));
-        file.write(val.c_str(), len);
         break;
     }
     }
@@ -347,52 +409,24 @@ FieldValue DatabaseManager::deserializeField(std::ifstream& file, const Column& 
         file.read(reinterpret_cast<char*>(&val), sizeof(val));
         return val;
     }
-    case Column::BOOL: {
-        bool val;
-        file.read(reinterpret_cast<char*>(&val), sizeof(val));
-        return val;
-    }
-    case Column::STRING:
-    case Column::CHAR: {
+    case Column::STRING: {
         int len;
         file.read(reinterpret_cast<char*>(&len), sizeof(len));
         std::string val(len, '\0');
         file.read(&val[0], len);
         return val;
     }
+    case Column::CHAR: {
+        std::string val(column.length, '\0');
+        file.read(&val[0], column.length);
+        return val;
+    }
+    case Column::BOOL: {
+        bool val;
+        file.read(reinterpret_cast<char*>(&val), sizeof(val));
+        return val;
+    }
     default:
-        throw std::runtime_error("Unknown column type");
-    }
-}
-
-void DatabaseManager::createIndex(const TableSchema& schema) {
-    // Find the primary key column to index
-    std::string primary_key_column;
-    for (const auto& column : schema.columns) {
-        if (column.is_primary_key) {
-            primary_key_column = column.name;
-            break;
-        }
-    }
-
-    if (primary_key_column.empty()) {
-        std::cerr << "Table '" << schema.name << "' has no primary key, no index created." << std::endl;
-        return;
-    }
-
-    // Create or open the index file
-    if (indexes.find(schema.name) == indexes.end()) {
-        indexes[schema.name] = new BPlusTree(schema.index_file_path);
-    }
-
-    std::cout << "Created index for table '" << schema.name << "' on primary key '" << primary_key_column << "'." << std::endl;
-}
-
-void DatabaseManager::loadIndexes() {
-    for (const auto& table : catalog.tables) {
-        if (std::filesystem::exists(table.index_file_path)) {
-            indexes[table.name] = new BPlusTree(table.index_file_path);
-            std::cout << "Loaded index for table '" << table.name << "'." << std::endl;
-        }
+        return 0; // Default to int 0
     }
 }

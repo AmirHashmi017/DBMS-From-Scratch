@@ -4,6 +4,7 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
+#include <filesystem>
 
 constexpr int FANOUT = 4; // Maximum number of keys per node
 
