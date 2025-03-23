@@ -3,15 +3,19 @@
   "WorkspaceRootPath": "D:\\Github Repos\\Database-Project\\Database Project\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.41.34120\\include\\xstring||{3B902123-F8A7-4915-9F01-361F908088D0}|"
+      "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database-Project\\Database Project\\main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.41.34120\\include\\exception||{3B902123-F8A7-4915-9F01-361F908088D0}|"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database-Project\\Database Project\\bptree.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:bptree.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database-Project\\Database Project\\catalog.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:catalog.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+      "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database-Project\\Database Project\\bptree.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:bptree.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database-Project\\Database Project\\DatabaseManager.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
@@ -22,20 +26,19 @@
       "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:database_manager.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database-Project\\Database Project\\catalog.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:catalog.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.41.34120\\include\\xstring||{3B902123-F8A7-4915-9F01-361F908088D0}|"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database-Project\\Database Project\\record.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:record.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database-Project\\Database Project\\page.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:page.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database-Project\\Database Project\\main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database-Project\\Database Project\\bptree.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:bptree.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database-Project\\Database Project\\catalog.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
@@ -57,7 +60,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 3,
+          "SelectedChildIndex": 10,
           "Children": [
             {
               "$type": "Bookmark",
@@ -73,30 +76,42 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 1,
+              "Title": "exception",
+              "DocumentMoniker": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.41.34120\\include\\exception",
+              "ToolTip": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.41.34120\\include\\exception",
+              "ViewState": "AgIAAJIBAAAAAAAAAAAWwJoBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-03-23T10:51:01.048Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
               "Title": "xstring",
               "DocumentMoniker": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.41.34120\\include\\xstring",
               "ToolTip": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.41.34120\\include\\xstring",
-              "ViewState": "AgIAAPQBAAAAAAAAAAAAAAUCAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA8AAAAjAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2025-03-23T09:38:20.108Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 4,
               "Title": "DatabaseManager.cpp",
               "DocumentMoniker": "D:\\Github Repos\\Database-Project\\Database Project\\DatabaseManager.cpp",
               "RelativeDocumentMoniker": "DatabaseManager.cpp",
               "ToolTip": "D:\\Github Repos\\Database-Project\\Database Project\\DatabaseManager.cpp",
               "RelativeToolTip": "DatabaseManager.cpp",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAAXAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA4AAAAGAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-03-23T09:27:33.258Z"
+              "WhenOpened": "2025-03-23T09:27:33.258Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 8,
               "Title": "record.cpp",
               "DocumentMoniker": "D:\\Github Repos\\Database-Project\\Database Project\\record.cpp",
               "RelativeDocumentMoniker": "record.cpp",
@@ -108,7 +123,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 9,
               "Title": "page.cpp",
               "DocumentMoniker": "D:\\Github Repos\\Database-Project\\Database Project\\page.cpp",
               "RelativeDocumentMoniker": "page.cpp",
@@ -120,67 +135,72 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 6,
               "Title": "catalog.cpp",
               "DocumentMoniker": "D:\\Github Repos\\Database-Project\\Database Project\\catalog.cpp",
               "RelativeDocumentMoniker": "catalog.cpp",
               "ToolTip": "D:\\Github Repos\\Database-Project\\Database Project\\catalog.cpp",
               "RelativeToolTip": "catalog.cpp",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACsAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-03-23T09:25:38.06Z"
+              "WhenOpened": "2025-03-23T09:25:38.06Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "bptree.cpp",
               "DocumentMoniker": "D:\\Github Repos\\Database-Project\\Database Project\\bptree.cpp",
               "RelativeDocumentMoniker": "bptree.cpp",
               "ToolTip": "D:\\Github Repos\\Database-Project\\Database Project\\bptree.cpp",
               "RelativeToolTip": "bptree.cpp",
-              "ViewState": "AgIAABEBAAAAAAAAAAAAAB8BAAA8AAAAAAAAAA==",
+              "ViewState": "AgIAAAEAAAAAAAAAAAAmwBEAAAA1AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-03-23T09:24:42.941Z"
+              "WhenOpened": "2025-03-23T09:24:42.941Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 0,
               "Title": "main.cpp",
               "DocumentMoniker": "D:\\Github Repos\\Database-Project\\Database Project\\main.cpp",
               "RelativeDocumentMoniker": "main.cpp",
               "ToolTip": "D:\\Github Repos\\Database-Project\\Database Project\\main.cpp",
               "RelativeToolTip": "main.cpp",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAAjAAAAAAAAAA==",
+              "ViewState": "AgIAACEAAAAAAAAAAAAAADIAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-03-23T09:22:30.325Z"
+              "WhenOpened": "2025-03-23T09:22:30.325Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 5,
               "Title": "database_manager.h",
               "DocumentMoniker": "D:\\Github Repos\\Database-Project\\Database Project\\database_manager.h",
               "RelativeDocumentMoniker": "database_manager.h",
               "ToolTip": "D:\\Github Repos\\Database-Project\\Database Project\\database_manager.h",
               "RelativeToolTip": "database_manager.h",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA4AAAAYAAAAAAAAAA==",
+              "ViewState": "AgIAACwAAAAAAAAAAAAAAEQAAAAGAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-03-23T09:20:03.653Z"
+              "WhenOpened": "2025-03-23T09:20:03.653Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 3,
               "Title": "bptree.h",
               "DocumentMoniker": "D:\\Github Repos\\Database-Project\\Database Project\\bptree.h",
               "RelativeDocumentMoniker": "bptree.h",
               "ToolTip": "D:\\Github Repos\\Database-Project\\Database Project\\bptree.h",
               "RelativeToolTip": "bptree.h",
-              "ViewState": "AgIAAAUAAAAAAAAAAAAqwBQAAAARAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACQAAAAGAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-03-23T09:19:18.391Z"
+              "WhenOpened": "2025-03-23T09:19:18.391Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 9,
+              "DocumentIndex": 10,
               "Title": "catalog.h",
               "DocumentMoniker": "D:\\Github Repos\\Database-Project\\Database Project\\catalog.h",
               "RelativeDocumentMoniker": "catalog.h",
@@ -192,7 +212,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 10,
+              "DocumentIndex": 11,
               "Title": "page.h",
               "DocumentMoniker": "D:\\Github Repos\\Database-Project\\Database Project\\page.h",
               "RelativeDocumentMoniker": "page.h",
@@ -204,7 +224,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 11,
+              "DocumentIndex": 12,
               "Title": "record.h",
               "DocumentMoniker": "D:\\Github Repos\\Database-Project\\Database Project\\record.h",
               "RelativeDocumentMoniker": "record.h",
