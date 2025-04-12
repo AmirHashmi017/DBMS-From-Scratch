@@ -45,6 +45,7 @@ public:
 
     // Get schema for a specific table
     TableSchema getTableSchema(const std::string& table_name) const;
+    std::vector<Record> getAllRecords(const std::string& table_name);
 
 private:
     Catalog catalog;
@@ -64,6 +65,7 @@ private:
 
     // Load existing indexes
     void loadIndexes();
+    
 };
 
 #endif

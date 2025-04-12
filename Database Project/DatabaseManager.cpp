@@ -145,6 +145,8 @@ void DatabaseManager::loadIndexes() {
     }
 }
 
+
+
 bool DatabaseManager::insertRecord(const std::string& table_name, const Record& record) {
     // Find the table
     TableSchema schema;
@@ -429,4 +431,49 @@ FieldValue DatabaseManager::deserializeField(std::ifstream& file, const Column& 
     default:
         return 0; // Default to int 0
     }
+}
+
+std::vector<Record> DatabaseManager::getAllRecords(const std::string& table_name) {
+    std::vector<Record> results;
+
+    // Find the table schema
+    TableSchema schema;
+    bool found = false;
+
+    for (const auto& table : catalog.tables) {
+        if (table.name == table_name) {
+            schema = table;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        std::cerr << "Table '" << table_name << "' not found" << std::endl;
+        return results;
+    }
+
+    // Check if data file exists
+    if (!std::filesystem::exists(schema.data_file_path)) {
+        std::cerr << "Data file not found: " << schema.data_file_path << std::endl;
+        return results;
+    }
+
+    // Open data file for reading
+    std::ifstream data_file(schema.data_file_path, std::ios::binary);
+    if (!data_file) {
+        std::cerr << "Failed to open data file: " << schema.data_file_path << std::endl;
+        return results;
+    }
+
+    // Read all records from the data file
+    data_file.seekg(0, std::ios::end);
+    size_t file_size = data_file.tellg();
+    data_file.seekg(0);
+
+    while (data_file.tellg() < file_size && data_file.good()) {
+        results.push_back(loadRecord(data_file, schema));
+    }
+
+    return results;
 }

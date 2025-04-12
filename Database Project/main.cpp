@@ -28,8 +28,8 @@ void displayTableData(DatabaseManager& db) {
     try {
         auto schema = db.getTableSchema(tableName);
 
-        // Get all records by searching with empty condition
-        auto results = db.searchRecords(tableName, "", FieldValue{});
+        // Get all records
+        auto results = db.getAllRecords(tableName);
 
         if (results.empty()) {
             std::cout << "Table '" << tableName << "' is empty.\n";
