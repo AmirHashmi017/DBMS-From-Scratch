@@ -147,10 +147,10 @@ void BPlusTree::insert(int key, int data_offset) {
             i++;
         }
 
-        // Check for duplicate key - don't update existing data, reject the insert
+        // Check for duplicate key
         if (i < current.keys.size() && current.keys[i] == key) {
-            std::cout << "Warning: Attempted to insert duplicate key " << key << std::endl;
-            return; // Don't update existing record
+            std::cout << "Key " << key << " already exists, updating data pointer" << std::endl;
+            current.data_ptrs[i] = data_offset;
         }
         else {
             std::cout << "Inserting key " << key << " at position " << i << std::endl;
@@ -300,17 +300,11 @@ std::vector<int> BPlusTree::search(int key) {
     }
 
     std::cout << "Found leaf node at offset: " << current_offset << std::endl;
-    std::cout << "Leaf node contains " << current.keys.size() << " keys" << std::endl;
 
-    // Debug: Print all keys and data pointers in this leaf
-    for (size_t i = 0; i < current.keys.size(); i++) {
-        std::cout << "  Key: " << current.keys[i] << ", Data offset: " << current.data_ptrs[i] << std::endl;
-    }
-
-    // Search for the key in the leaf node (exact match only)
+    // Search for the key in the leaf node
     for (size_t i = 0; i < current.keys.size(); i++) {
         if (current.keys[i] == key) {
-            std::cout << "Found exact match for key " << key << " at position " << i << std::endl;
+            std::cout << "Found key " << key << " at position " << i << std::endl;
             result.push_back(current.data_ptrs[i]);
         }
     }
