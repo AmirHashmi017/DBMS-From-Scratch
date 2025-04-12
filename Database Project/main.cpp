@@ -146,61 +146,120 @@ void insertRecordMenu(DatabaseManager& db) {
     std::cin >> tableName;
     clearInputBuffer();
 
+    // Check if table exists
+    bool tableFound = false;
+    for (const auto& table : tables) {
+        if (table == tableName) {
+            tableFound = true;
+            break;
+        }
+    }
+
+    if (!tableFound) {
+        std::cout << "Error: Table '" << tableName << "' not found.\n";
+        return;
+    }
+
     try {
         auto schema = db.getTableSchema(tableName);
         Record record;
 
         for (const auto& column : schema.columns) {
-            std::cout << "Enter value for " << column.name << " (" << [&]() {
-                switch (column.type) {
-                case Column::INT: return "int";
-                case Column::FLOAT: return "float";
-                case Column::STRING: return "string";
-                case Column::CHAR: return "char";
-                case Column::BOOL: return "bool";
-                default: return "unknown";
-                }
-                }() << "): ";
+            bool validInput = false;
+            while (!validInput) {
+                std::cout << "Enter value for " << column.name;
 
-            switch (column.type) {
-            case Column::INT: {
-                int value;
-                std::cin >> value;
-                clearInputBuffer();
-                record[column.name] = value;
-                break;
-            }
-            case Column::FLOAT: {
-                float value;
-                std::cin >> value;
-                clearInputBuffer();
-                record[column.name] = value;
-                break;
-            }
-            case Column::STRING: {
-                std::string value;
-                std::cin.ignore(); // Clear newline
-                std::getline(std::cin, value);
-                record[column.name] = value;
-                break;
-            }
-            case Column::CHAR: {
-                std::string value;
-                std::cin >> value;
-                if (value.length() > column.length) {
-                    value = value.substr(0, column.length);
+                // Show column type, constraints, and references
+                std::cout << " (" << [&]() -> std::string {  // Explicit return type
+                    switch (column.type) {
+                    case Column::INT: return "int";
+                    case Column::FLOAT: return "float";
+                    case Column::STRING: return "string(max " + std::to_string(column.length) + " chars)";
+                    case Column::CHAR: return "char(max " + std::to_string(column.length) + " chars)";
+                    case Column::BOOL: return "bool";
+                    default: return "unknown";
+                    }
+                    }() << ")";
+                if (column.is_primary_key) {
+                    std::cout << " [PRIMARY KEY]";
                 }
-                record[column.name] = value;
-                break;
-            }
-            case Column::BOOL: {
-                bool value;
-                std::string input;
-                std::cin >> input;
-                value = (input == "true" || input == "1" || input == "y");
-                record[column.name] = value;
-                break;
-            }
+
+                if (column.is_foreign_key) {
+                    std::cout << " [REFERENCES " << column.references_table << "."
+                        << column.references_column << "]";
+                }
+
+                std::cout << ": ";
+
+                try {
+                    switch (column.type) {
+                    case Column::INT: {
+                        int value;
+                        std::cin >> value;
+                        if (std::cin.fail()) {
+                            throw std::runtime_error("Invalid integer input");
+                        }
+                        clearInputBuffer();
+                        record[column.name] = value;
+                        validInput = true;
+                        break;
+                    }
+                    case Column::FLOAT: {
+                        float value;
+                        std::cin >> value;
+                        if (std::cin.fail()) {
+                            throw std::runtime_error("Invalid float input");
+                        }
+                        clearInputBuffer();
+                        record[column.name] = value;
+                        validInput = true;
+                        break;
+                    }
+                    case Column::STRING: {
+                        std::string value;
+                        std::cin.ignore(); // Clear newline
+                        std::getline(std::cin, value);
+                        if (value.length() > column.length) {
+                            throw std::runtime_error("String too long (max " +
+                                std::to_string(column.length) + " chars)");
+                        }
+                        record[column.name] = value;
+                        validInput = true;
+                        break;
+                    }
+                    case Column::CHAR: {
+                        std::string value;
+                        std::cin >> value;
+                        clearInputBuffer();
+                        if (value.length() > column.length) {
+                            throw std::runtime_error("String too long (max " +
+                                std::to_string(column.length) + " chars)");
+                        }
+                        record[column.name] = value;
+                        validInput = true;
+                        break;
+                    }
+                    case Column::BOOL: {
+                        std::string input;
+                        std::cin >> input;
+                        clearInputBuffer();
+                        std::transform(input.begin(), input.end(), input.begin(), ::tolower);
+                        if (input != "true" && input != "false" && input != "1" && input != "0" &&
+                            input != "y" && input != "n") {
+                            throw std::runtime_error("Invalid boolean input (use true/false, 1/0, or y/n)");
+                        }
+                        bool value = (input == "true" || input == "1" || input == "y");
+                        record[column.name] = value;
+                        validInput = true;
+                        break;
+                    }
+                    }
+                }
+                catch (const std::exception& e) {
+                    std::cout << "Error: " << e.what() << "\nPlease try again.\n";
+                    std::cin.clear();
+                    std::cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
+                }
             }
         }
 
@@ -208,11 +267,11 @@ void insertRecordMenu(DatabaseManager& db) {
             std::cout << "Record inserted successfully!\n";
         }
         else {
-            std::cout << "Failed to insert record.\n";
+            std::cout << "Failed to insert record. Check constraints and try again.\n";
         }
     }
-    catch (...) {
-        std::cout << "Error: Table not found or invalid input.\n";
+    catch (const std::exception& e) {
+        std::cout << "Error: " << e.what() << "\n";
     }
 }
 

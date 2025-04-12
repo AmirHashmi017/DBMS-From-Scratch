@@ -58,6 +58,68 @@ bool DatabaseManager::createTable(
         }
     }
 
+    // Validate that primary key column exists in the columns list
+    if (!primary_key.empty()) {
+        bool found = false;
+        for (const auto& [col_name, col_type, col_length] : columns) {
+            if (col_name == primary_key) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            std::cerr << "Primary key column '" << primary_key << "' not found in column list" << std::endl;
+            return false;
+        }
+    }
+
+    // Validate foreign key references
+    for (const auto& [col_name, ref_pair] : foreign_keys) {
+        const auto& [ref_table, ref_column] = ref_pair;
+
+        // Check if the column exists in our columns list
+        bool col_found = false;
+        for (const auto& [name, type, length] : columns) {
+            if (name == col_name) {
+                col_found = true;
+                break;
+            }
+        }
+        if (!col_found) {
+            std::cerr << "Foreign key column '" << col_name << "' not found in column list" << std::endl;
+            return false;
+        }
+
+        // Check if referenced table exists
+        bool ref_table_found = false;
+        bool ref_column_found = false;
+
+        for (const auto& table : catalog.tables) {
+            if (table.name == ref_table) {
+                ref_table_found = true;
+
+                // Check if referenced column exists in referenced table
+                for (const auto& col : table.columns) {
+                    if (col.name == ref_column) {
+                        ref_column_found = true;
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+
+        if (!ref_table_found) {
+            std::cerr << "Referenced table '" << ref_table << "' does not exist" << std::endl;
+            return false;
+        }
+
+        if (!ref_column_found) {
+            std::cerr << "Referenced column '" << ref_column << "' not found in table '" << ref_table << "'" << std::endl;
+            return false;
+        }
+    }
+
     // Create new table schema
     TableSchema table;
     table.name = table_name;
@@ -97,7 +159,9 @@ bool DatabaseManager::createTable(
     catalog.save(catalog_path);
 
     // Create index for primary key
-    createIndex(table);
+    if (!primary_key.empty()) {
+        createIndex(table);
+    }
 
     return true;
 }
@@ -163,13 +227,16 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
         return false;
     }
 
-    // Get the primary key value
+    // Get the primary key value and column
     int primary_key_value = 0;
     std::string primary_key_column;
+    bool has_primary_key = false;
 
     for (const auto& column : schema.columns) {
         if (column.is_primary_key) {
             primary_key_column = column.name;
+            has_primary_key = true;
+
             if (record.find(primary_key_column) == record.end()) {
                 std::cerr << "Record is missing primary key '" << primary_key_column << "'" << std::endl;
                 return false;
@@ -182,8 +249,53 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
                 std::cerr << "Primary key must be an integer" << std::endl;
                 return false;
             }
-
             break;
+        }
+    }
+
+    // Verify there are no duplicate primary keys
+    if (has_primary_key) {
+        auto existing_records = searchRecords(table_name, primary_key_column, primary_key_value);
+        if (!existing_records.empty()) {
+            std::cerr << "Error: Record with primary key " << primary_key_value
+                << " already exists. Primary keys must be unique." << std::endl;
+            return false;
+        }
+    }
+
+    // Validate field lengths for string and char fields
+    for (const auto& column : schema.columns) {
+        if (record.find(column.name) != record.end()) {
+            if (column.type == Column::STRING || column.type == Column::CHAR) {
+                if (std::holds_alternative<std::string>(record.at(column.name))) {
+                    const std::string& value = std::get<std::string>(record.at(column.name));
+                    if (value.length() > column.length) {
+                        std::cerr << "Error: Value for column '" << column.name
+                            << "' exceeds maximum length of " << column.length << std::endl;
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    // Validate foreign key constraints
+    for (const auto& column : schema.columns) {
+        if (column.is_foreign_key && record.find(column.name) != record.end()) {
+            const FieldValue& foreign_key_value = record.at(column.name);
+            auto referenced_records = searchRecords(
+                column.references_table,
+                column.references_column,
+                foreign_key_value
+            );
+
+            if (referenced_records.empty()) {
+                std::cerr << "Error: Foreign key constraint violation. No matching record found in "
+                    << column.references_table << " for " << column.name << " = ";
+                std::visit([](auto&& arg) { std::cerr << arg; }, foreign_key_value);
+                std::cerr << std::endl;
+                return false;
+            }
         }
     }
 
@@ -210,15 +322,14 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
     saveRecord(data_file, record, schema, offset);
 
     // Index the record
-    indexes[table_name]->insert(primary_key_value, offset);
+    if (has_primary_key) {
+        indexes[table_name]->insert(primary_key_value, offset);
+    }
 
     return true;
 }
 
 std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name, const std::string& key_column, const FieldValue& key_value) {
-    
-
-    // Find the table
     std::vector<Record> results;
 
     // Find the table schema
@@ -233,12 +344,14 @@ std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name
     }
 
     if (!found) {
+        std::cerr << "Table '" << table_name << "' not found" << std::endl;
         return results;
     }
 
     // Open data file
     std::ifstream data_file(schema.data_file_path, std::ios::binary);
     if (!data_file) {
+        std::cerr << "Failed to open data file: " << schema.data_file_path << std::endl;
         return results;
     }
 
@@ -248,7 +361,7 @@ std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name
         size_t file_size = data_file.tellg();
         data_file.seekg(0);
 
-        while (data_file.tellg() < file_size) {
+        while (data_file.tellg() < file_size && data_file.good()) {
             results.push_back(loadRecord(data_file, schema));
         }
         return results;
@@ -263,25 +376,35 @@ std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name
         }
     }
 
-    
-
     // If searching by primary key and index exists, use it
-    if (is_primary_key && indexes.find(table_name) != indexes.end()) {
+    if (is_primary_key && indexes.find(table_name) != indexes.end() && std::holds_alternative<int>(key_value)) {
         int key_int = std::get<int>(key_value);
         auto offsets = indexes[table_name]->search(key_int);
 
         for (int offset : offsets) {
-            data_file.seekg(offset);
-            results.push_back(loadRecord(data_file, schema));
+            if (offset >= 0) { // Ensure valid offset
+                data_file.clear(); // Clear any error flags
+                data_file.seekg(offset);
+                if (data_file.good()) {
+                    Record record = loadRecord(data_file, schema);
+                    // Double-check the record actually has the key we're looking for
+                    if (record.find(key_column) != record.end() && record[key_column] == key_value) {
+                        results.push_back(record);
+                    }
+                    else {
+                        std::cerr << "Warning: Index returned a mismatched record for key " << key_int << std::endl;
+                    }
+                }
+            }
         }
     }
     else {
-        // Sequential scan
+        // Sequential scan for non-primary key or if index doesn't exist
         data_file.seekg(0, std::ios::end);
         size_t file_size = data_file.tellg();
         data_file.seekg(0);
 
-        while (data_file.tellg() < file_size) {
+        while (data_file.tellg() < file_size && data_file.good()) {
             size_t record_start = data_file.tellg();
             Record record = loadRecord(data_file, schema);
 
@@ -294,6 +417,7 @@ std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name
 
     return results;
 }
+
 
 std::vector<std::string> DatabaseManager::listTables() const {
     std::vector<std::string> table_names;
