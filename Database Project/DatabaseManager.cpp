@@ -216,12 +216,14 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
 }
 
 std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name, const std::string& key_column, const FieldValue& key_value) {
-    std::vector<Record> results;
+    
 
     // Find the table
+    std::vector<Record> results;
+
+    // Find the table schema
     TableSchema schema;
     bool found = false;
-
     for (const auto& table : catalog.tables) {
         if (table.name == table_name) {
             schema = table;
@@ -231,7 +233,24 @@ std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name
     }
 
     if (!found) {
-        std::cerr << "Table '" << table_name << "' not found" << std::endl;
+        return results;
+    }
+
+    // Open data file
+    std::ifstream data_file(schema.data_file_path, std::ios::binary);
+    if (!data_file) {
+        return results;
+    }
+
+    // If no search condition provided, return all records
+    if (key_column.empty()) {
+        data_file.seekg(0, std::ios::end);
+        size_t file_size = data_file.tellg();
+        data_file.seekg(0);
+
+        while (data_file.tellg() < file_size) {
+            results.push_back(loadRecord(data_file, schema));
+        }
         return results;
     }
 
@@ -244,18 +263,7 @@ std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name
         }
     }
 
-    // Check if data file exists
-    if (!std::filesystem::exists(schema.data_file_path)) {
-        std::cerr << "Data file not found: " << schema.data_file_path << std::endl;
-        return results;
-    }
-
-    // Open data file for reading
-    std::ifstream data_file(schema.data_file_path, std::ios::binary);
-    if (!data_file) {
-        std::cerr << "Failed to open data file: " << schema.data_file_path << std::endl;
-        return results;
-    }
+    
 
     // If searching by primary key and index exists, use it
     if (is_primary_key && indexes.find(table_name) != indexes.end()) {
