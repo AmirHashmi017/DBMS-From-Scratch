@@ -46,6 +46,15 @@ public:
     // Get schema for a specific table
     TableSchema getTableSchema(const std::string& table_name) const;
     std::vector<Record> getAllRecords(const std::string& table_name);
+    bool updateRecord(const std::string& table_name, const std::string& key_column,
+        const FieldValue& key_value, const Record& new_values);
+
+    bool deleteRecord(const std::string& table_name, const std::string& key_column,
+        const FieldValue& key_value);
+
+    std::vector<Record> searchRecordsAdvanced(
+        const std::string& table_name,
+        const std::vector<std::tuple<std::string, FieldValue, std::string>>& conditions);
 
 private:
     Catalog catalog;
