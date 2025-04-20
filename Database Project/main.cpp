@@ -917,9 +917,113 @@ void searchRecordsMenu(DatabaseManager& db) {
     }
 }
 
+void createDatabaseMenu(DatabaseManager& db) {
+    std::string dbName;
+    std::cout << "Enter database name to create: ";
+    std::cin >> dbName;
+    clearInputBuffer();
 
+    if (db.createDatabase(dbName)) {
+        std::cout << "Database '" << dbName << "' created successfully.\n";
+    } else {
+        std::cout << "Failed to create database '" << dbName << "'.\n";
+    }
+}
 
-// Add this function to your main.cpp to incorporate the menu options
+void dropDatabaseMenu(DatabaseManager& db) {
+    auto databases = db.listDatabases();
+    if (databases.empty()) {
+        std::cout << "No databases exist.\n";
+        return;
+    }
+
+    std::cout << "Available databases:\n";
+    for (const auto& dbName : databases) {
+        std::cout << " - " << dbName << "\n";
+    }
+
+    std::string dbName;
+    std::cout << "Enter database name to drop: ";
+    std::cin >> dbName;
+    clearInputBuffer();
+
+    if (db.dropDatabase(dbName)) {
+        std::cout << "Database '" << dbName << "' dropped successfully.\n";
+    } else {
+        std::cout << "Failed to drop database '" << dbName << "'.\n";
+    }
+}
+
+void useDatabaseMenu(DatabaseManager& db) {
+    auto databases = db.listDatabases();
+    if (databases.empty()) {
+        std::cout << "No databases exist.\n";
+        return;
+    }
+
+    std::cout << "Available databases:\n";
+    for (const auto& dbName : databases) {
+        std::cout << " - " << dbName << "\n";
+    }
+
+    std::string dbName;
+    std::cout << "Enter database name to use: ";
+    std::cin >> dbName;
+    clearInputBuffer();
+
+    if (db.useDatabase(dbName)) {
+        std::cout << "Using database '" << dbName << "'.\n";
+    } else {
+        std::cout << "Failed to use database '" << dbName << "'.\n";
+    }
+}
+
+void dropTableMenu(DatabaseManager& db) {
+    if (db.getCurrentDatabase().empty()) {
+        std::cout << "No database selected. Please use a database first.\n";
+        return;
+    }
+
+    auto tables = db.listTables();
+    if (tables.empty()) {
+        std::cout << "No tables exist in the current database.\n";
+        return;
+    }
+
+    std::cout << "Available tables:\n";
+    for (const auto& table : tables) {
+        std::cout << " - " << table << "\n";
+    }
+
+    std::string tableName;
+    std::cout << "Enter table name to drop: ";
+    std::cin >> tableName;
+    clearInputBuffer();
+
+    if (db.dropTable(tableName)) {
+        std::cout << "Table '" << tableName << "' dropped successfully.\n";
+    } else {
+        std::cout << "Failed to drop table '" << tableName << "'.\n";
+    }
+}
+
+void listDatabasesMenu(DatabaseManager& db) {
+    auto databases = db.listDatabases();
+    if (databases.empty()) {
+        std::cout << "No databases exist.\n";
+        return;
+    }
+
+    std::cout << "Available databases:\n";
+    for (const auto& dbName : databases) {
+        std::cout << " - " << dbName;
+        if (dbName == db.getCurrentDatabase()) {
+            std::cout << " (current)";
+        }
+        std::cout << "\n";
+    }
+}
+
 void mainMenu() {
     // Create the database manager
     DatabaseManager db("catalog.dat");
@@ -933,7 +1037,12 @@ void mainMenu() {
         std::cout << "4. Delete Record\n";
         std::cout << "5. Display Records\n";
         std::cout << "6. Search Records\n";
-        std::cout << "7. Exit\n";
+        std::cout << "7. Create Database\n";
+        std::cout << "8. Drop Database\n";
+        std::cout << "9. Use Database\n";
+        std::cout << "10. Drop Table\n";
+        std::cout << "11. List Databases\n";
+        std::cout << "12. Exit\n";
         std::cout << "Select an option: ";
 
         int choice;
@@ -960,6 +1069,21 @@ void mainMenu() {
             searchRecordsMenu(db);
             break;
         case 7:
+            createDatabaseMenu(db);
+            break;
+        case 8:
+            dropDatabaseMenu(db);
+            break;
+        case 9:
+            useDatabaseMenu(db);
+            break;
+        case 10:
+            dropTableMenu(db);
+            break;
+        case 11:
+            listDatabasesMenu(db);
+            break;
+        case 12:
             running = false;
             std::cout << "Exiting program. Goodbye!\n";
             break;

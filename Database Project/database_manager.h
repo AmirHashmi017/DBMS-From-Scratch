@@ -56,9 +56,18 @@ public:
         const std::string& table_name,
         const std::vector<std::tuple<std::string, FieldValue, std::string>>& conditions);
 
+    // Database operations
+    bool createDatabase(const std::string& db_name);
+    bool dropDatabase(const std::string& db_name);
+    bool useDatabase(const std::string& db_name);
+    bool dropTable(const std::string& table_name);
+    std::vector<std::string> listDatabases() const;
+    std::string getCurrentDatabase() const;
+
 private:
     Catalog catalog;
     std::string catalog_path;
+    std::string current_database;
     std::map<std::string, BPlusTree*> indexes; // Map of table name to index
 
     // Helper methods

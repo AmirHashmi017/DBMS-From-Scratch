@@ -102,3 +102,16 @@ void Catalog::save(const std::string& path) {
         }
     }
 }
+
+bool Catalog::removeTable(const std::string& table_name) {
+    auto it = std::find_if(tables.begin(), tables.end(),
+        [&table_name](const TableSchema& table) {
+            return table.name == table_name;
+        });
+
+    if (it != tables.end()) {
+        tables.erase(it);
+        return true;
+    }
+    return false;
+}

@@ -23,6 +23,7 @@ DatabaseManager::DatabaseManager(const std::string& catalog_path_rel) {
 
     // Set absolute path for catalog
     this->catalog_path = (dataDir / std::filesystem::path(catalog_path_rel).filename()).string();
+    this->current_database.clear(); // Initialize current database as empty
 
     std::cout << "Using catalog path: " << this->catalog_path << std::endl;
 
@@ -144,8 +145,6 @@ void DatabaseManager::loadIndexes() {
         }
     }
 }
-
-
 
 bool DatabaseManager::insertRecord(const std::string& table_name, const Record& record) {
     // Find the table
@@ -943,4 +942,126 @@ std::vector<Record> DatabaseManager::searchRecordsAdvanced(
     }
 
     return results;
+}
+
+bool DatabaseManager::createDatabase(const std::string& db_name) {
+    std::string exePath = getExecutablePath();
+    std::filesystem::path dbDir = std::filesystem::path(exePath) / "data" / db_name;
+    
+    if (std::filesystem::exists(dbDir)) {
+        std::cerr << "Database '" << db_name << "' already exists." << std::endl;
+        return false;
+    }
+    
+    if (!std::filesystem::create_directories(dbDir)) {
+        std::cerr << "Failed to create database directory." << std::endl;
+        return false;
+    }
+    
+    // Create a catalog file for the new database
+    std::ofstream catalog_file(dbDir / "catalog.bin", std::ios::binary);
+    if (!catalog_file) {
+        std::cerr << "Failed to create catalog file for database." << std::endl;
+        return false;
+    }
+    
+    return true;
+}
+
+bool DatabaseManager::dropDatabase(const std::string& db_name) {
+    std::string exePath = getExecutablePath();
+    std::filesystem::path dbDir = std::filesystem::path(exePath) / "data" / db_name;
+    
+    if (!std::filesystem::exists(dbDir)) {
+        std::cerr << "Database '" << db_name << "' does not exist." << std::endl;
+        return false;
+    }
+    
+    if (current_database == db_name) {
+        current_database.clear();
+    }
+    
+    try {
+        std::filesystem::remove_all(dbDir);
+        return true;
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "Error dropping database: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool DatabaseManager::useDatabase(const std::string& db_name) {
+    std::string exePath = getExecutablePath();
+    std::filesystem::path dbDir = std::filesystem::path(exePath) / "data" / db_name;
+    
+    if (!std::filesystem::exists(dbDir)) {
+        std::cerr << "Database '" << db_name << "' does not exist." << std::endl;
+        return false;
+    }
+    
+    current_database = db_name;
+    catalog_path = (dbDir / "catalog.bin").string();
+    
+    // Reload the catalog for the new database
+    catalog.load(catalog_path);
+    
+    // Reload indexes for the new database
+    loadIndexes();
+    
+    return true;
+}
+
+bool DatabaseManager::dropTable(const std::string& table_name) {
+    if (current_database.empty()) {
+        std::cerr << "No database selected. Use 'USE DATABASE' first." << std::endl;
+        return false;
+    }
+    
+    // Remove table from catalog
+    if (!catalog.removeTable(table_name)) {
+        std::cerr << "Table '" << table_name << "' does not exist." << std::endl;
+        return false;
+    }
+    
+    // Delete the table's data file
+    std::string exePath = getExecutablePath();
+    std::filesystem::path tableFile = std::filesystem::path(exePath) / "data" / current_database / (table_name + ".bin");
+    
+    if (std::filesystem::exists(tableFile)) {
+        std::filesystem::remove(tableFile);
+    }
+    
+    // Remove and delete the index if it exists
+    auto it = indexes.find(table_name);
+    if (it != indexes.end()) {
+        delete it->second;
+        indexes.erase(it);
+    }
+    
+    // Save the updated catalog
+    catalog.save(catalog_path);
+    
+    return true;
+}
+
+std::vector<std::string> DatabaseManager::listDatabases() const {
+    std::vector<std::string> databases;
+    std::string exePath = getExecutablePath();
+    std::filesystem::path dataDir = std::filesystem::path(exePath) / "data";
+    
+    if (!std::filesystem::exists(dataDir)) {
+        return databases;
+    }
+    
+    for (const auto& entry : std::filesystem::directory_iterator(dataDir)) {
+        if (entry.is_directory()) {
+            databases.push_back(entry.path().filename().string());
+        }
+    }
+    
+    return databases;
+}
+
+std::string DatabaseManager::getCurrentDatabase() const {
+    return current_database;
 }

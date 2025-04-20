@@ -26,6 +26,7 @@ class Catalog {
 public:
     void load(const std::string& path);
     void save(const std::string& path);
+    bool removeTable(const std::string& table_name);
     std::vector<TableSchema> tables;
 };
 
