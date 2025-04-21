@@ -2,12 +2,533 @@
 #include <iostream>
 #include <filesystem>
 #include <limits>
-
+#include <algorithm>
+#include <iomanip>  
+#include <variant> 
+#include <map> 
 void clearInputBuffer() {
     std::cin.clear();
     std::cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
 }
 
+
+// Add these functions to your main file
+
+void searchRecordsWithFilterMenu(DatabaseManager& db) {
+    auto tables = db.listTables();
+    if (tables.empty()) {
+        std::cout << "No tables exist. Please create a table first.\n";
+        return;
+    }
+
+    std::cout << "Available tables:\n";
+    for (const auto& table : tables) {
+        std::cout << " - " << table << "\n";
+    }
+
+    std::string tableName;
+    std::cout << "Enter table name: ";
+    std::cin >> tableName;
+    clearInputBuffer();
+
+    TableSchema schema;
+    try {
+        schema = db.getTableSchema(tableName);
+    }
+    catch (...) {
+        std::cout << "Error: Table not found.\n";
+        return;
+    }
+
+    // Display available columns
+    std::cout << "Available columns:\n";
+    for (const auto& col : schema.columns) {
+        std::cout << " - " << col.name << " (";
+        switch (col.type) {
+        case Column::INT: std::cout << "INT"; break;
+        case Column::FLOAT: std::cout << "FLOAT"; break;
+        case Column::STRING: std::cout << "STRING"; break;
+        case Column::CHAR: std::cout << "CHAR"; break;
+        case Column::BOOL: std::cout << "BOOL"; break;
+        }
+        std::cout << ")\n";
+    }
+
+    // Build conditions
+    std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
+    std::vector<std::string> operators;
+
+    std::cout << "Enter number of conditions: ";
+    int numConditions;
+    std::cin >> numConditions;
+    clearInputBuffer();
+
+    for (int i = 0; i < numConditions; i++) {
+        std::cout << "\nCondition " << (i + 1) << ":\n";
+
+        // Get column
+        std::string columnName;
+        std::cout << "Enter column name: ";
+        std::cin >> columnName;
+        clearInputBuffer();
+
+        // Find column type
+        Column::Type colType = Column::INT;
+        bool found = false;
+        for (const auto& col : schema.columns) {
+            if (col.name == columnName) {
+                colType = col.type;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            std::cout << "Column not found. Using default type INT.\n";
+        }
+
+        // Get operator
+        std::cout << "Available operators: =, !=, >, <, >=, <=, LIKE\n";
+        std::cout << "Enter operator: ";
+        std::string op;
+        std::cin >> op;
+        clearInputBuffer();
+
+        // Get value
+        std::cout << "Enter value: ";
+        FieldValue value;
+
+        switch (colType) {
+        case Column::INT: {
+            int val;
+            std::cin >> val;
+            value = val;
+            break;
+        }
+        case Column::FLOAT: {
+            float val;
+            std::cin >> val;
+            value = val;
+            break;
+        }
+                          // Update all the case blocks for STRING and CHAR in main.cpp like this:
+
+        case Column::STRING:
+        case Column::CHAR: {
+            clearInputBuffer();  // Add this to clear any remaining input first
+            std::string val;
+            std::getline(std::cin, val);
+            value = val;
+            break;
+        }
+        case Column::BOOL: {
+            std::string val;
+            std::cin >> val;
+            bool boolVal = (val == "true" || val == "1" || val == "y" || val == "yes");
+            value = boolVal;
+            break;
+        }
+        }
+
+        // Add condition
+        conditions.push_back(std::make_tuple(columnName, op, value));
+
+        // Add logical operator for the next condition if not the last one
+        if (i < numConditions - 1) {
+            std::cout << "Logical operator for next condition (AND/OR/NOT): ";
+            std::string logicalOp;
+            std::cin >> logicalOp;
+            clearInputBuffer();
+            operators.push_back(logicalOp);
+        }
+    }
+    try {
+        auto results = db.searchRecordsWithFilter(tableName, conditions, operators);
+
+        // Display results with proper formatting
+        std::cout << "\nFound " << results.size() << " records:\n";
+
+        // Print column headers
+        for (const auto& col : schema.columns) {
+            std::cout << std::setw(20) << col.name << " | ";
+        }
+        std::cout << "\n" << std::string(schema.columns.size() * 22, '-') << "\n";
+
+        // Print records with proper type handling
+        for (const auto& record : results) {
+            for (const auto& col : schema.columns) {
+                if (record.find(col.name) != record.end()) {
+                    std::visit([](auto&& arg) {
+                        std::cout << std::setw(20) << arg << " | ";
+                        }, record.at(col.name));
+                }
+                else {
+                    std::cout << std::setw(20) << "NULL" << " | ";
+                }
+            }
+            std::cout << "\n";
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << "\n";
+    }
+}
+
+
+void updateRecordsWithFilterMenu(DatabaseManager& db) {
+    auto tables = db.listTables();
+    if (tables.empty()) {
+        std::cout << "No tables exist. Please create a table first.\n";
+        return;
+    }
+
+    std::cout << "Available tables:\n";
+    for (const auto& table : tables) {
+        std::cout << " - " << table << "\n";
+    }
+
+    std::string tableName;
+    std::cout << "Enter table name: ";
+    std::cin >> tableName;
+    clearInputBuffer();
+
+    TableSchema schema;
+    try {
+        schema = db.getTableSchema(tableName);
+    }
+    catch (...) {
+        std::cout << "Error: Table not found.\n";
+        return;
+    }
+
+    // Display available columns
+    std::cout << "Available columns:\n";
+    for (const auto& col : schema.columns) {
+        std::cout << " - " << col.name << " (";
+        switch (col.type) {
+        case Column::INT: std::cout << "INT"; break;
+        case Column::FLOAT: std::cout << "FLOAT"; break;
+        case Column::STRING: std::cout << "STRING"; break;
+        case Column::CHAR: std::cout << "CHAR"; break;
+        case Column::BOOL: std::cout << "BOOL"; break;
+        }
+        std::cout << ")\n";
+    }
+
+    // Build update values
+    std::map<std::string, FieldValue> updateValues;
+
+    std::cout << "Enter number of columns to update: ";
+    int numColumns;
+    std::cin >> numColumns;
+    clearInputBuffer();
+
+    for (int i = 0; i < numColumns; i++) {
+        std::cout << "\nColumn " << (i + 1) << " to update:\n";
+
+        // Get column
+        std::string columnName;
+        std::cout << "Enter column name: ";
+        std::cin >> columnName;
+        clearInputBuffer();
+
+        // Find column type
+        Column::Type colType = Column::INT;
+        bool found = false;
+        for (const auto& col : schema.columns) {
+            if (col.name == columnName) {
+                colType = col.type;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            std::cout << "Column not found. Using default type INT.\n";
+        }
+
+        // Get new value
+        std::cout << "Enter new value: ";
+        FieldValue value;
+
+        switch (colType) {
+        case Column::INT: {
+            int val;
+            std::cin >> val;
+            value = val;
+            break;
+        }
+        case Column::FLOAT: {
+            float val;
+            std::cin >> val;
+            value = val;
+            break;
+        }
+                          // Update all the case blocks for STRING and CHAR in main.cpp like this:
+
+        case Column::STRING:
+        case Column::CHAR: {
+            clearInputBuffer();    // Add this line to fix string input
+            std::string val;
+            std::getline(std::cin, val);
+            value = val;
+            break;
+        }
+        case Column::BOOL: {
+            std::string val;
+            std::cin >> val;
+            bool boolVal = (val == "true" || val == "1" || val == "y" || val == "yes");
+            value = boolVal;
+            break;
+        }
+        }
+
+        // Add update value
+        updateValues[columnName] = value;
+    }
+
+    // Build conditions
+    std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
+    std::vector<std::string> operators;
+
+    std::cout << "\nEnter number of conditions: ";
+    int numConditions;
+    std::cin >> numConditions;
+    clearInputBuffer();
+
+    for (int i = 0; i < numConditions; i++) {
+        std::cout << "\nCondition " << (i + 1) << ":\n";
+
+        // Get column
+        std::string columnName;
+        std::cout << "Enter column name: ";
+        std::cin >> columnName;
+        clearInputBuffer();
+
+        // Find column type
+        Column::Type colType = Column::INT;
+        bool found = false;
+        for (const auto& col : schema.columns) {
+            if (col.name == columnName) {
+                colType = col.type;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            std::cout << "Column not found. Using default type INT.\n";
+        }
+
+        // Get operator
+        std::cout << "Available operators: =, !=, >, <, >=, <=, LIKE\n";
+        std::cout << "Enter operator: ";
+        std::string op;
+        std::cin >> op;
+        clearInputBuffer();
+
+        // Get value
+        std::cout << "Enter value: ";
+        FieldValue value;
+
+        switch (colType) {
+        case Column::INT: {
+            int val;
+            std::cin >> val;
+            value = val;
+            break;
+        }
+        case Column::FLOAT: {
+            float val;
+            std::cin >> val;
+            value = val;
+            break;
+        }
+        case Column::STRING:
+        case Column::CHAR: {
+            std::string val;
+            std::getline(std::cin, val);
+            value = val;
+            break;
+        }
+        case Column::BOOL: {
+            std::string val;
+            std::cin >> val;
+            bool boolVal = (val == "true" || val == "1" || val == "y" || val == "yes");
+            value = boolVal;
+            break;
+        }
+        }
+
+        // Add condition
+        conditions.push_back(std::make_tuple(columnName, op, value));
+
+        // Add logical operator for the next condition if not the last one
+        if (i < numConditions - 1) {
+            std::cout << "Logical operator for next condition (AND/OR/NOT): ";
+            std::string logicalOp;
+            std::cin >> logicalOp;
+            clearInputBuffer();
+            operators.push_back(logicalOp);
+        }
+    }
+
+    // Perform update
+    bool success = db.updateRecordsWithFilter(tableName, updateValues, conditions, operators);
+
+    if (success) {
+        std::cout << "Records updated successfully.\n";
+    }
+    else {
+        std::cout << "Failed to update records.\n";
+    }
+}
+// Completing the deleteRecordsWithFilterMenu function that was cut off
+void deleteRecordsWithFilterMenu(DatabaseManager& db) {
+    auto tables = db.listTables();
+    if (tables.empty()) {
+        std::cout << "No tables exist. Please create a table first.\n";
+        return;
+    }
+
+    std::cout << "Available tables:\n";
+    for (const auto& table : tables) {
+        std::cout << " - " << table << "\n";
+    }
+
+    std::string tableName;
+    std::cout << "Enter table name: ";
+    std::cin >> tableName;
+    clearInputBuffer();
+
+    TableSchema schema;
+    try {
+        schema = db.getTableSchema(tableName);
+    }
+    catch (...) {
+        std::cout << "Error: Table not found.\n";
+        return;
+    }
+
+    // Display available columns
+    std::cout << "Available columns:\n";
+    for (const auto& col : schema.columns) {
+        std::cout << " - " << col.name << " (";
+        switch (col.type) {
+        case Column::INT: std::cout << "INT"; break;
+        case Column::FLOAT: std::cout << "FLOAT"; break;
+        case Column::STRING: std::cout << "STRING"; break;
+        case Column::CHAR: std::cout << "CHAR"; break;
+        case Column::BOOL: std::cout << "BOOL"; break;
+        }
+        std::cout << ")\n";
+    }
+
+    // Build conditions
+    std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
+    std::vector<std::string> operators;
+
+    std::cout << "Enter number of conditions: ";
+    int numConditions;
+    std::cin >> numConditions;
+    clearInputBuffer();
+
+    for (int i = 0; i < numConditions; i++) {
+        std::cout << "\nCondition " << (i + 1) << ":\n";
+
+        // Get column
+        std::string columnName;
+        std::cout << "Enter column name: ";
+        std::cin >> columnName;
+        clearInputBuffer();
+
+        // Find column type
+        Column::Type colType = Column::INT;
+        bool found = false;
+        for (const auto& col : schema.columns) {
+            if (col.name == columnName) {
+                colType = col.type;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            std::cout << "Column not found. Using default type INT.\n";
+        }
+
+        // Get operator
+        std::cout << "Available operators: =, !=, >, <, >=, <=, LIKE\n";
+        std::cout << "Enter operator: ";
+        std::string op;
+        std::cin >> op;
+        clearInputBuffer();
+
+        // Get value
+        std::cout << "Enter value: ";
+        FieldValue value;
+
+        switch (colType) {
+        case Column::INT: {
+            int val;
+            std::cin >> val;
+            value = val;
+            break;
+        }
+        case Column::FLOAT: {
+            float val;
+            std::cin >> val;
+            value = val;
+            break;
+        }
+        case Column::STRING:
+        case Column::CHAR: {
+            clearInputBuffer();  // Add this to clear any remaining input first
+            std::string val;
+            std::getline(std::cin, val);
+            value = val;
+            break;
+        }
+        case Column::BOOL: {
+            std::string val;
+            std::cin >> val;
+            bool boolVal = (val == "true" || val == "1" || val == "y" || val == "yes");
+            value = boolVal;
+            break;
+        }
+        }
+
+        // Add condition
+        conditions.push_back(std::make_tuple(columnName, op, value));
+
+        // Add logical operator for the next condition if not the last one
+        if (i < numConditions - 1) {
+            std::cout << "Logical operator for next condition (AND/OR/NOT): ";
+            std::string logicalOp;
+            std::cin >> logicalOp;
+            clearInputBuffer();
+            operators.push_back(logicalOp);
+        }
+    }
+
+    // Confirm deletion
+    std::cout << "\nWARNING: This will delete all records matching your conditions.\n";
+    std::cout << "Are you sure you want to proceed? (y/n): ";
+    std::string confirm;
+    std::cin >> confirm;
+
+    if (confirm != "y" && confirm != "Y" && confirm != "yes" && confirm != "YES") {
+        std::cout << "Delete operation cancelled.\n";
+        return;
+    }
+
+    // Perform delete
+    int deletedCount = db.deleteRecordsWithFilter(tableName, conditions, operators);
+
+    std::cout << "Deleted " << deletedCount << " records.\n";
+}
+
+// Function to display all records in a table
 void displayTableData(DatabaseManager& db) {
     auto tables = db.listTables();
     if (tables.empty()) {
@@ -21,114 +542,126 @@ void displayTableData(DatabaseManager& db) {
     }
 
     std::string tableName;
-    std::cout << "Enter table name to display all data: ";
+    std::cout << "Enter table name: ";
     std::cin >> tableName;
-    std::cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
+    clearInputBuffer();
 
+    TableSchema schema;
     try {
-        auto schema = db.getTableSchema(tableName);
-
-        // Get all records
-        auto results = db.getAllRecords(tableName);
-
-        if (results.empty()) {
-            std::cout << "Table '" << tableName << "' is empty.\n";
-            return;
-        }
-
-        // Print table header
-        std::cout << "\nData in table '" << tableName << "':\n";
-        for (const auto& column : schema.columns) {
-            std::cout << std::setw(20) << column.name << " | ";
-        }
-        std::cout << "\n" << std::string(schema.columns.size() * 22, '-') << "\n";
-
-        // Print each record
-        for (const auto& record : results) {
-            for (const auto& column : schema.columns) {
-                if (record.find(column.name) != record.end()) {
-                    std::visit([](auto&& arg) {
-                        std::cout << std::setw(20) << arg << " | ";
-                        }, record.at(column.name));
-                }
-                else {
-                    std::cout << std::setw(20) << "NULL" << " | ";
-                }
-            }
-            std::cout << "\n";
-        }
+        schema = db.getTableSchema(tableName);
     }
     catch (...) {
-        std::cout << "Error: Table not found or error reading data.\n";
+        std::cout << "Error: Table not found.\n";
+        return;
+    }
+
+    // Get all records
+    auto records = db.getAllRecords(tableName);
+
+    std::cout << "\nTable: " << tableName << ", Total Records: " << records.size() << "\n";
+
+    // Print column headers
+    for (const auto& col : schema.columns) {
+        std::cout << col.name << " | ";
+    }
+    std::cout << "\n";
+    std::cout << std::string(80, '-') << "\n";
+
+    // Print records
+    for (const auto& record : records) {
+        for (const auto& col : schema.columns) {
+            if (record.find(col.name) != record.end()) {
+                std::visit([](auto&& arg) {
+                    std::cout << arg << " | ";
+                    }, record.at(col.name));
+            }
+            else {
+                std::cout << "(null) | ";
+            }
+        }
+        std::cout << "\n";
     }
 }
+
+// Function to create a table
 void createTableMenu(DatabaseManager& db) {
     std::string tableName;
     std::cout << "Enter table name: ";
     std::cin >> tableName;
     clearInputBuffer();
 
+    int numColumns;
+    std::cout << "Enter number of columns: ";
+    std::cin >> numColumns;
+    clearInputBuffer();
+
     std::vector<std::tuple<std::string, std::string, int>> columns;
     std::string primaryKey;
     std::map<std::string, std::pair<std::string, std::string>> foreignKeys;
 
-    int numColumns;
-    std::cout << "Number of columns: ";
-    std::cin >> numColumns;
-    clearInputBuffer();
-
     for (int i = 0; i < numColumns; i++) {
-        std::string name, type;
-        int length = 0;
+        std::string colName, colType;
+        int colLength = 0;
 
-        std::cout << "Column " << i + 1 << " name: ";
-        std::cin >> name;
+        std::cout << "\nColumn " << (i + 1) << ":\n";
+        std::cout << "Name: ";
+        std::cin >> colName;
         clearInputBuffer();
 
-        std::cout << "Column " << i + 1 << " type (int/float/string/char/bool): ";
-        std::cin >> type;
+        std::cout << "Type (int, float, string, char, bool): ";
+        std::cin >> colType;
         clearInputBuffer();
 
-        if (type == "string" || type == "char") {
-            std::cout << "Length for " << type << ": ";
-            std::cin >> length;
+        if (colType == "string" || colType == "char") {
+            std::cout << "Length: ";
+            std::cin >> colLength;
             clearInputBuffer();
         }
 
-        columns.emplace_back(name, type, length);
+        columns.push_back(std::make_tuple(colName, colType, colLength));
 
-        // Check if this should be primary key
-        char isPrimary;
         std::cout << "Is this the primary key? (y/n): ";
-        std::cin >> isPrimary;
+        char isPk;
+        std::cin >> isPk;
         clearInputBuffer();
-        if (isPrimary == 'y' || isPrimary == 'Y') {
-            primaryKey = name;
+
+        if (isPk == 'y' || isPk == 'Y') {
+            primaryKey = colName;
         }
 
-        // Check for foreign key
-        char isForeign;
         std::cout << "Is this a foreign key? (y/n): ";
-        std::cin >> isForeign;
+        char isFk;
+        std::cin >> isFk;
         clearInputBuffer();
-        if (isForeign == 'y' || isForeign == 'Y') {
+
+        if (isFk == 'y' || isFk == 'Y') {
             std::string refTable, refColumn;
-            std::cout << "Reference table: ";
+            std::cout << "Referenced table: ";
             std::cin >> refTable;
-            std::cout << "Reference column: ";
+            clearInputBuffer();
+
+            std::cout << "Referenced column: ";
             std::cin >> refColumn;
-            foreignKeys[name] = { refTable, refColumn };
+            clearInputBuffer();
+
+            foreignKeys[colName] = std::make_pair(refTable, refColumn);
         }
     }
 
-    if (db.createTable(tableName, columns, primaryKey, foreignKeys)) {
-        std::cout << "Table created successfully!\n";
+    if (primaryKey.empty()) {
+        std::cout << "Warning: No primary key specified.\n";
+    }
+
+    bool success = db.createTable(tableName, columns, primaryKey, foreignKeys);
+    if (success) {
+        std::cout << "Table created successfully.\n";
     }
     else {
         std::cout << "Failed to create table.\n";
     }
 }
 
+// Function to insert a record
 void insertRecordMenu(DatabaseManager& db) {
     auto tables = db.listTables();
     if (tables.empty()) {
@@ -144,138 +677,74 @@ void insertRecordMenu(DatabaseManager& db) {
     std::string tableName;
     std::cout << "Enter table name: ";
     std::cin >> tableName;
-    clearInputBuffer();
-
-    // Check if table exists
-    bool tableFound = false;
-    for (const auto& table : tables) {
-        if (table == tableName) {
-            tableFound = true;
-            break;
-        }
-    }
-
-    if (!tableFound) {
-        std::cout << "Error: Table '" << tableName << "' not found.\n";
-        return;
-    }
 
     try {
         auto schema = db.getTableSchema(tableName);
         Record record;
 
         for (const auto& column : schema.columns) {
-            bool validInput = false;
-            while (!validInput) {
-                std::cout << "Enter value for " << column.name;
-
-                // Show column type, constraints, and references
-                std::cout << " (" << [&]() -> std::string {  // Explicit return type
-                    switch (column.type) {
-                    case Column::INT: return "int";
-                    case Column::FLOAT: return "float";
-                    case Column::STRING: return "string(max " + std::to_string(column.length) + " chars)";
-                    case Column::CHAR: return "char(max " + std::to_string(column.length) + " chars)";
-                    case Column::BOOL: return "bool";
-                    default: return "unknown";
-                    }
-                    }() << ")";
-                if (column.is_primary_key) {
-                    std::cout << " [PRIMARY KEY]";
-                }
-
-                if (column.is_foreign_key) {
-                    std::cout << " [REFERENCES " << column.references_table << "."
-                        << column.references_column << "]";
-                }
-
-                std::cout << ": ";
-
-                try {
-                    switch (column.type) {
-                    case Column::INT: {
-                        int value;
-                        std::cin >> value;
-                        if (std::cin.fail()) {
-                            throw std::runtime_error("Invalid integer input");
-                        }
-                        clearInputBuffer();
-                        record[column.name] = value;
-                        validInput = true;
-                        break;
-                    }
-                    case Column::FLOAT: {
-                        float value;
-                        std::cin >> value;
-                        if (std::cin.fail()) {
-                            throw std::runtime_error("Invalid float input");
-                        }
-                        clearInputBuffer();
-                        record[column.name] = value;
-                        validInput = true;
-                        break;
-                    }
-                    case Column::STRING: {
-                        std::string value;
-                        std::cin.ignore(); // Clear newline
-                        std::getline(std::cin, value);
-                        if (value.length() > column.length) {
-                            throw std::runtime_error("String too long (max " +
-                                std::to_string(column.length) + " chars)");
-                        }
-                        record[column.name] = value;
-                        validInput = true;
-                        break;
-                    }
-                    case Column::CHAR: {
-                        std::string value;
-                        std::cin >> value;
-                        clearInputBuffer();
-                        if (value.length() > column.length) {
-                            throw std::runtime_error("String too long (max " +
-                                std::to_string(column.length) + " chars)");
-                        }
-                        record[column.name] = value;
-                        validInput = true;
-                        break;
-                    }
-                    case Column::BOOL: {
-                        std::string input;
-                        std::cin >> input;
-                        clearInputBuffer();
-                        std::transform(input.begin(), input.end(), input.begin(), ::tolower);
-                        if (input != "true" && input != "false" && input != "1" && input != "0" &&
-                            input != "y" && input != "n") {
-                            throw std::runtime_error("Invalid boolean input (use true/false, 1/0, or y/n)");
-                        }
-                        bool value = (input == "true" || input == "1" || input == "y");
-                        record[column.name] = value;
-                        validInput = true;
-                        break;
-                    }
-                    }
-                }
-                catch (const std::exception& e) {
-                    std::cout << "Error: " << e.what() << "\nPlease try again.\n";
-                    std::cin.clear();
-                    std::cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
-                }
+            std::cout << "Enter value for column '" << column.name << "' (";
+            switch (column.type) {
+            case Column::INT: std::cout << "INT"; break;
+            case Column::FLOAT: std::cout << "FLOAT"; break;
+            case Column::STRING: std::cout << "STRING"; break;
+            case Column::CHAR: std::cout << "CHAR"; break;
+            case Column::BOOL: std::cout << "BOOL"; break;
             }
+            std::cout << "): ";
+
+            FieldValue value;
+            switch (column.type) {
+            case Column::INT: {
+                int val;
+                std::cin >> val;
+                value = val;
+                break;
+            }
+            case Column::FLOAT: {
+                float val;
+                std::cin >> val;
+                value = val;
+                break;
+            }
+            case Column::STRING:
+            case Column::CHAR: {
+                std::string val;
+                std::getline(std::cin, val);
+                value = val;
+                break;
+            }
+
+            case Column::BOOL: {
+                std::string val;
+                std::cin >> val;
+                bool boolVal = (val == "true" || val == "1" || val == "y" || val == "yes");
+                value = boolVal;
+                break;
+            }
+            }
+
+            record[column.name] = value;
+            clearInputBuffer();
         }
 
-        if (db.insertRecord(tableName, record)) {
-            std::cout << "Record inserted successfully!\n";
+        bool success = db.insertRecord(tableName, record);
+        if (success) {
+            std::cout << "Record inserted successfully.\n";
         }
         else {
-            std::cout << "Failed to insert record. Check constraints and try again.\n";
+            std::cout << "Failed to insert record.\n";
         }
     }
-    catch (const std::exception& e) {
-        std::cout << "Error: " << e.what() << "\n";
+    catch (...) {
+        std::cout << "Error: Table not found.\n";
     }
 }
 
-void updateRecordMenu(DatabaseManager& db) {
+// Updated main function to include the new menu options
+
+
+void searchRecordsMenu(DatabaseManager& db) {
     auto tables = db.listTables();
     if (tables.empty()) {
         std::cout << "No tables exist. Please create a table first.\n";
@@ -290,50 +759,25 @@ void updateRecordMenu(DatabaseManager& db) {
     std::string tableName;
     std::cout << "Enter table name: ";
     std::cin >> tableName;
-    clearInputBuffer();
-
-    // Check if table exists
-    bool tableFound = false;
-    for (const auto& table : tables) {
-        if (table == tableName) {
-            tableFound = true;
-            break;
-        }
-    }
-
-    if (!tableFound) {
-        std::cout << "Error: Table '" << tableName << "' not found.\n";
-        return;
-    }
+    clearInputBuffer();    // Add this line
 
     try {
         auto schema = db.getTableSchema(tableName);
 
-        // Select column to use for finding the record
-        std::cout << "Enter column name to use for record selection: ";
-        std::string keyColumn;
-        std::cin >> keyColumn;
-        clearInputBuffer();
+        std::string columnName;
+        std::cout << "Enter column name to search: ";
+        std::cin >> columnName;
 
-        // Find column type
+        // Find the column type
         Column::Type colType = Column::INT;
-        bool columnFound = false;
-
         for (const auto& col : schema.columns) {
-            if (col.name == keyColumn) {
+            if (col.name == columnName) {
                 colType = col.type;
-                columnFound = true;
                 break;
             }
         }
 
-        if (!columnFound) {
-            std::cout << "Error: Column '" << keyColumn << "' not found in table.\n";
-            return;
-        }
-
-        // Get search value for this column
-        std::cout << "Enter value to find record: ";
+        std::cout << "Enter search value: ";
         FieldValue searchValue;
 
         switch (colType) {
@@ -349,17 +793,12 @@ void updateRecordMenu(DatabaseManager& db) {
             searchValue = value;
             break;
         }
-        case Column::STRING: {
-            std::string value;
-            std::cin.ignore();
-            std::getline(std::cin, value);
-            searchValue = value;
-            break;
-        }
+        case Column::STRING:
         case Column::CHAR: {
-            std::string value;
-            std::cin >> value;
-            searchValue = value;
+            clearInputBuffer();  // Add this to clear any remaining input first
+            std::string val;
+            std::getline(std::cin, val);
+            searchValue = val;
             break;
         }
         case Column::BOOL: {
@@ -372,127 +811,20 @@ void updateRecordMenu(DatabaseManager& db) {
         }
         }
 
-        // Search for records to confirm they exist
-        auto matchingRecords = db.searchRecords(tableName, keyColumn, searchValue);
-        if (matchingRecords.empty()) {
-            std::cout << "No records found matching the criteria.\n";
-            return;
-        }
+        auto results = db.searchRecords(tableName, columnName, searchValue);
+        std::cout << "\nFound " << results.size() << " records:\n";
 
-        std::cout << "Found " << matchingRecords.size() << " matching records.\n";
-        std::cout << "Enter new values for fields (leave blank to keep current value):\n";
-
-        Record newValues;
-
-        for (const auto& column : schema.columns) {
-            std::cout << "Update " << column.name << "? (y/n): ";
-            char updateField;
-            std::cin >> updateField;
-            clearInputBuffer();
-
-            if (updateField == 'y' || updateField == 'Y') {
-                bool validInput = false;
-                while (!validInput) {
-                    std::cout << "Enter new value for " << column.name;
-
-                    std::cout << " (" << [&]() -> std::string {
-                        switch (column.type) {
-                        case Column::INT: return "int";
-                        case Column::FLOAT: return "float";
-                        case Column::STRING: return "string(max " + std::to_string(column.length) + " chars)";
-                        case Column::CHAR: return "char(max " + std::to_string(column.length) + " chars)";
-                        case Column::BOOL: return "bool";
-                        default: return "unknown";
-                        }
-                        }() << "): ";
-
-                    try {
-                        switch (column.type) {
-                        case Column::INT: {
-                            int value;
-                            std::cin >> value;
-                            if (std::cin.fail()) {
-                                throw std::runtime_error("Invalid integer input");
-                            }
-                            clearInputBuffer();
-                            newValues[column.name] = value;
-                            validInput = true;
-                            break;
-                        }
-                        case Column::FLOAT: {
-                            float value;
-                            std::cin >> value;
-                            if (std::cin.fail()) {
-                                throw std::runtime_error("Invalid float input");
-                            }
-                            clearInputBuffer();
-                            newValues[column.name] = value;
-                            validInput = true;
-                            break;
-                        }
-                        case Column::STRING: {
-                            std::string value;
-                            std::cin.ignore(); // Clear newline
-                            std::getline(std::cin, value);
-                            if (value.length() > column.length) {
-                                throw std::runtime_error("String too long (max " +
-                                    std::to_string(column.length) + " chars)");
-                            }
-                            newValues[column.name] = value;
-                            validInput = true;
-                            break;
-                        }
-                        case Column::CHAR: {
-                            std::string value;
-                            std::cin >> value;
-                            clearInputBuffer();
-                            if (value.length() > column.length) {
-                                throw std::runtime_error("String too long (max " +
-                                    std::to_string(column.length) + " chars)");
-                            }
-                            newValues[column.name] = value;
-                            validInput = true;
-                            break;
-                        }
-                        case Column::BOOL: {
-                            std::string input;
-                            std::cin >> input;
-                            clearInputBuffer();
-                            std::transform(input.begin(), input.end(), input.begin(), ::tolower);
-                            if (input != "true" && input != "false" && input != "1" && input != "0" &&
-                                input != "y" && input != "n") {
-                                throw std::runtime_error("Invalid boolean input (use true/false, 1/0, or y/n)");
-                            }
-                            bool value = (input == "true" || input == "1" || input == "y");
-                            newValues[column.name] = value;
-                            validInput = true;
-                            break;
-                        }
-                        }
-                    }
-                    catch (const std::exception& e) {
-                        std::cout << "Error: " << e.what() << "\nPlease try again.\n";
-                        std::cin.clear();
-                        std::cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
-                    }
-                }
+        for (const auto& record : results) {
+            for (const auto& [key, value] : record) {
+                std::visit([](auto&& arg) {
+                    std::cout << arg << " | ";
+                    }, value);
             }
-        }
-
-        if (newValues.empty()) {
-            std::cout << "No fields selected for update. Operation cancelled.\n";
-            return;
-        }
-
-        if (db.updateRecord(tableName, keyColumn, searchValue, newValues)) {
-            std::cout << "Records updated successfully!\n";
-        }
-        else {
-            std::cout << "Failed to update records.\n";
+            std::cout << "\n";
         }
     }
-    catch (const std::exception& e) {
-        std::cout << "Error: " << e.what() << "\n";
+    catch (...) {
+        std::cout << "Error: Table or column not found.\n";
     }
 }
 
@@ -528,12 +860,56 @@ void listTablesMenu(DatabaseManager& db) {
         }
     }
 }
+#include <iostream>
+#include <filesystem>
+#include <limits>
+#include <conio.h> // For _kbhit() and _getch()
+#include <windows.h> // For system("cls")
 
-// First complete the deleteRecordMenu function that was cut off
-void deleteRecordMenu(DatabaseManager& db) {
+// Function to clear the screen
+void clearScreen() {
+    system("cls");
+}
+
+// Function to display centered text
+void displayCentered(const std::string& text) {
+    const int consoleWidth = 80; // Standard console width
+    int padding = (consoleWidth - text.length()) / 2;
+    if (padding < 0) padding = 0;
+    std::cout << std::string(padding, ' ') << text << "\n";
+}
+
+// Function to display menu with selection
+int showMenu(const std::vector<std::string>& options, int currentSelection) {
+    const std::string normalArrow = ">>>>>>>>>>>>>>>";
+    const std::string selectedArrow = ">>>>>>>>>>>>>>>>>>>>>>>>>>>";
+
+    clearScreen();
+    displayCentered("Simple Database Management System");
+    std::cout << "\n";
+
+    for (int i = 0; i < options.size(); i++) {
+        if (i == currentSelection) {
+            std::cout << " " << (i + 1) << ". " << options[i] << " " << selectedArrow << "\n";
+        }
+        else {
+            std::cout << " " << (i + 1) << ". " << options[i] << " " << normalArrow << "\n";
+        }
+    }
+
+    std::cout << "\nUse arrow keys to navigate or enter option number: ";
+    return currentSelection;
+}
+
+void dropTableMenu(DatabaseManager& db) {
+    if (db.getCurrentDatabase().empty()) {
+        std::cout << "No database selected. Please use a database first.\n";
+        return;
+    }
+
     auto tables = db.listTables();
     if (tables.empty()) {
-        std::cout << "No tables exist. Please create a table first.\n";
+        std::cout << "No tables exist in the current database.\n";
         return;
     }
 
@@ -543,123 +919,41 @@ void deleteRecordMenu(DatabaseManager& db) {
     }
 
     std::string tableName;
-    std::cout << "Enter table name: ";
+    std::cout << "Enter table name to drop: ";
     std::cin >> tableName;
     clearInputBuffer();
 
-    // Check if table exists
-    bool tableFound = false;
-    for (const auto& table : tables) {
-        if (table == tableName) {
-            tableFound = true;
-            break;
-        }
+    if (db.dropTable(tableName)) {
+        std::cout << "Table '" << tableName << "' dropped successfully.\n";
     }
-
-    if (!tableFound) {
-        std::cout << "Error: Table '" << tableName << "' not found.\n";
+    else {
+        std::cout << "Failed to drop table '" << tableName << "'.\n";
+    }
+}
+void useDatabaseMenu(DatabaseManager& db) {
+    auto databases = db.listDatabases();
+    if (databases.empty()) {
+        std::cout << "No databases exist.\n";
         return;
     }
 
-    try {
-        auto schema = db.getTableSchema(tableName);
-
-        // Select column to use for finding the record
-        std::cout << "Enter column name to use for record selection: ";
-        std::string keyColumn;
-        std::cin >> keyColumn;
-        clearInputBuffer();
-
-        // Find column type
-        Column::Type colType = Column::INT;
-        bool columnFound = false;
-
-        for (const auto& col : schema.columns) {
-            if (col.name == keyColumn) {
-                colType = col.type;
-                columnFound = true;
-                break;
-            }
-        }
-
-        if (!columnFound) {
-            std::cout << "Error: Column '" << keyColumn << "' not found in table.\n";
-            return;
-        }
-
-        // Get search value for this column
-        std::cout << "Enter value to find record(s) to delete: ";
-        FieldValue searchValue;
-
-        switch (colType) {
-        case Column::INT: {
-            int value;
-            std::cin >> value;
-            searchValue = value;
-            break;
-        }
-        case Column::FLOAT: {
-            float value;
-            std::cin >> value;
-            searchValue = value;
-            break;
-        }
-        case Column::STRING: {
-            std::string value;
-            std::cin.ignore();
-            std::getline(std::cin, value);
-            searchValue = value;
-            break;
-        }
-        case Column::CHAR: {
-            std::string value;
-            std::cin >> value;
-            searchValue = value;
-            break;
-        }
-        case Column::BOOL: {
-            bool value;
-            std::string input;
-            std::cin >> input;
-            value = (input == "true" || input == "1" || input == "y");
-            searchValue = value;
-            break;
-        }
-        }
-
-        // Search for records to confirm they exist
-        auto matchingRecords = db.searchRecords(tableName, keyColumn, searchValue);
-        if (matchingRecords.empty()) {
-            std::cout << "No records found matching the criteria.\n";
-            return;
-        }
-
-        std::cout << "Found " << matchingRecords.size() << " matching record(s).\n";
-        std::cout << "Are you sure you want to delete " <<
-            (matchingRecords.size() == 1 ? "this record" : "these records") << "? (y/n): ";
-
-        char confirm;
-        std::cin >> confirm;
-        clearInputBuffer();
-
-        if (confirm != 'y' && confirm != 'Y') {
-            std::cout << "Delete operation cancelled.\n";
-            return;
-        }
-
-        if (db.deleteRecord(tableName, keyColumn, searchValue)) {
-            std::cout << "Records deleted successfully!\n";
-        }
-        else {
-            std::cout << "Failed to delete records.\n";
-        }
+    std::cout << "Available databases:\n";
+    for (const auto& dbName : databases) {
+        std::cout << " - " << dbName << "\n";
     }
-    catch (const std::exception& e) {
-        std::cout << "Error: " << e.what() << "\n";
+
+    std::string dbName;
+    std::cout << "Enter database name to use: ";
+    std::cin >> dbName;
+    clearInputBuffer();
+
+    if (db.useDatabase(dbName)) {
+        std::cout << "Using database '" << dbName << "'.\n";
+    }
+    else {
+        std::cout << "Failed to use database '" << dbName << "'.\n";
     }
 }
-
-// Now add a function to display records from a table
 void displayRecordsMenu(DatabaseManager& db) {
     auto tables = db.listTables();
     if (tables.empty()) {
@@ -740,183 +1034,22 @@ void displayRecordsMenu(DatabaseManager& db) {
     }
 }
 
-// Function to search records with more advanced filtering options
-void searchRecordsMenu(DatabaseManager& db) {
-    auto tables = db.listTables();
-    if (tables.empty()) {
-        std::cout << "No tables exist. Please create a table first.\n";
+void listDatabasesMenu(DatabaseManager& db) {
+    auto databases = db.listDatabases();
+    if (databases.empty()) {
+        std::cout << "No databases exist.\n";
         return;
     }
 
-    std::cout << "Available tables:\n";
-    for (const auto& table : tables) {
-        std::cout << " - " << table << "\n";
-    }
-
-    std::string tableName;
-    std::cout << "Enter table name: ";
-    std::cin >> tableName;
-    clearInputBuffer();
-
-    // Check if table exists
-    bool tableFound = false;
-    for (const auto& table : tables) {
-        if (table == tableName) {
-            tableFound = true;
-            break;
+    std::cout << "Available databases:\n";
+    for (const auto& dbName : databases) {
+        std::cout << " - " << dbName;
+        if (dbName == db.getCurrentDatabase()) {
+            std::cout << " (current)";
         }
-    }
-
-    if (!tableFound) {
-        std::cout << "Error: Table '" << tableName << "' not found.\n";
-        return;
-    }
-
-    try {
-        auto schema = db.getTableSchema(tableName);
-
-        // Show available columns
-        std::cout << "Available columns:\n";
-        for (const auto& col : schema.columns) {
-            std::cout << " - " << col.name << " (";
-            switch (col.type) {
-            case Column::INT: std::cout << "int"; break;
-            case Column::FLOAT: std::cout << "float"; break;
-            case Column::STRING: std::cout << "string"; break;
-            case Column::CHAR: std::cout << "char"; break;
-            case Column::BOOL: std::cout << "bool"; break;
-            }
-            std::cout << ")\n";
-        }
-
-        std::cout << "Enter column name to search by: ";
-        std::string keyColumn;
-        std::cin >> keyColumn;
-        clearInputBuffer();
-
-        // Find column type
-        Column::Type colType = Column::INT;
-        bool columnFound = false;
-
-        for (const auto& col : schema.columns) {
-            if (col.name == keyColumn) {
-                colType = col.type;
-                columnFound = true;
-                break;
-            }
-        }
-
-        if (!columnFound) {
-            std::cout << "Error: Column '" << keyColumn << "' not found in table.\n";
-            return;
-        }
-
-        std::cout << "Available operators: =, !=, >, <, >=, <=\n";
-        std::cout << "Enter operator: ";
-        std::string op;
-        std::cin >> op;
-        clearInputBuffer();
-
-        // Validate operator
-        if (op != "=" && op != "!=" && op != ">" && op != "<" && op != ">=" && op != "<=") {
-            std::cout << "Error: Invalid operator '" << op << "'.\n";
-            return;
-        }
-
-        // Get search value
-        std::cout << "Enter value to search for: ";
-        FieldValue searchValue;
-
-        switch (colType) {
-        case Column::INT: {
-            int value;
-            std::cin >> value;
-            searchValue = value;
-            break;
-        }
-        case Column::FLOAT: {
-            float value;
-            std::cin >> value;
-            searchValue = value;
-            break;
-        }
-        case Column::STRING: {
-            std::string value;
-            std::cin.ignore();
-            std::getline(std::cin, value);
-            searchValue = value;
-            break;
-        }
-        case Column::CHAR: {
-            std::string value;
-            std::cin >> value;
-            searchValue = value;
-            break;
-        }
-        case Column::BOOL: {
-            bool value;
-            std::string input;
-            std::cin >> input;
-            value = (input == "true" || input == "1" || input == "y");
-            searchValue = value;
-            break;
-        }
-        }
-
-        // Create conditions vector for advanced search
-        std::vector<std::tuple<std::string, FieldValue, std::string>> conditions;
-        conditions.push_back(std::make_tuple(keyColumn, searchValue, op));
-
-        // Search records
-        auto records = db.searchRecordsAdvanced(tableName, conditions);
-
-        if (records.empty()) {
-            std::cout << "No records found matching the criteria.\n";
-            return;
-        }
-
-        // Display results
-        std::cout << "\nFound " << records.size() << " matching record(s):\n";
-        std::cout << std::string(80, '-') << "\n";
-
-        // Display column headers
-        for (const auto& col : schema.columns) {
-            std::cout << std::left << std::setw(15) << col.name << " | ";
-        }
-        std::cout << "\n" << std::string(80, '-') << "\n";
-
-        // Display records
-        for (const auto& record : records) {
-            for (const auto& col : schema.columns) {
-                if (record.find(col.name) != record.end()) {
-                    std::cout << std::left << std::setw(15);
-                    if (std::holds_alternative<int>(record.at(col.name))) {
-                        std::cout << std::get<int>(record.at(col.name));
-                    }
-                    else if (std::holds_alternative<float>(record.at(col.name))) {
-                        std::cout << std::get<float>(record.at(col.name));
-                    }
-                    else if (std::holds_alternative<std::string>(record.at(col.name))) {
-                        std::cout << std::get<std::string>(record.at(col.name));
-                    }
-                    else if (std::holds_alternative<bool>(record.at(col.name))) {
-                        std::cout << (std::get<bool>(record.at(col.name)) ? "true" : "false");
-                    }
-                    std::cout << " | ";
-                }
-                else {
-                    std::cout << std::left << std::setw(15) << "NULL" << " | ";
-                }
-            }
-            std::cout << "\n";
-        }
-        std::cout << std::string(80, '-') << "\n";
-    }
-    catch (const std::exception& e) {
-        std::cout << "Error: " << e.what() << "\n";
+        std::cout << "\n";
     }
 }
-
 void createDatabaseMenu(DatabaseManager& db) {
     std::string dbName;
     std::cout << "Enter database name to create: ";
@@ -925,11 +1058,11 @@ void createDatabaseMenu(DatabaseManager& db) {
 
     if (db.createDatabase(dbName)) {
         std::cout << "Database '" << dbName << "' created successfully.\n";
-    } else {
+    }
+    else {
         std::cout << "Failed to create database '" << dbName << "'.\n";
     }
 }
-
 void dropDatabaseMenu(DatabaseManager& db) {
     auto databases = db.listDatabases();
     if (databases.empty()) {
@@ -949,82 +1082,12 @@ void dropDatabaseMenu(DatabaseManager& db) {
 
     if (db.dropDatabase(dbName)) {
         std::cout << "Database '" << dbName << "' dropped successfully.\n";
-    } else {
+    }
+    else {
         std::cout << "Failed to drop database '" << dbName << "'.\n";
     }
 }
-
-void useDatabaseMenu(DatabaseManager& db) {
-    auto databases = db.listDatabases();
-    if (databases.empty()) {
-        std::cout << "No databases exist.\n";
-        return;
-    }
-
-    std::cout << "Available databases:\n";
-    for (const auto& dbName : databases) {
-        std::cout << " - " << dbName << "\n";
-    }
-
-    std::string dbName;
-    std::cout << "Enter database name to use: ";
-    std::cin >> dbName;
-    clearInputBuffer();
-
-    if (db.useDatabase(dbName)) {
-        std::cout << "Using database '" << dbName << "'.\n";
-    } else {
-        std::cout << "Failed to use database '" << dbName << "'.\n";
-    }
-}
-
-void dropTableMenu(DatabaseManager& db) {
-    if (db.getCurrentDatabase().empty()) {
-        std::cout << "No database selected. Please use a database first.\n";
-        return;
-    }
-
-    auto tables = db.listTables();
-    if (tables.empty()) {
-        std::cout << "No tables exist in the current database.\n";
-        return;
-    }
-
-    std::cout << "Available tables:\n";
-    for (const auto& table : tables) {
-        std::cout << " - " << table << "\n";
-    }
-
-    std::string tableName;
-    std::cout << "Enter table name to drop: ";
-    std::cin >> tableName;
-    clearInputBuffer();
-
-    if (db.dropTable(tableName)) {
-        std::cout << "Table '" << tableName << "' dropped successfully.\n";
-    } else {
-        std::cout << "Failed to drop table '" << tableName << "'.\n";
-    }
-}
-
-void listDatabasesMenu(DatabaseManager& db) {
-    auto databases = db.listDatabases();
-    if (databases.empty()) {
-        std::cout << "No databases exist.\n";
-        return;
-    }
-
-    std::cout << "Available databases:\n";
-    for (const auto& dbName : databases) {
-        std::cout << " - " << dbName;
-        if (dbName == db.getCurrentDatabase()) {
-            std::cout << " (current)";
-        }
-        std::cout << "\n";
-    }
-}
-
-void mainMenu() {
+int main() {
     // Create the database manager
     DatabaseManager db("catalog.dat");
 
@@ -1057,16 +1120,16 @@ void mainMenu() {
             insertRecordMenu(db);
             break;
         case 3:
-            updateRecordMenu(db);
+            updateRecordsWithFilterMenu(db);
             break;
         case 4:
-            deleteRecordMenu(db);
+            deleteRecordsWithFilterMenu(db);
             break;
         case 5:
             displayRecordsMenu(db);
             break;
         case 6:
-            searchRecordsMenu(db);
+            searchRecordsWithFilterMenu(db);
             break;
         case 7:
             createDatabaseMenu(db);
@@ -1092,9 +1155,4 @@ void mainMenu() {
             break;
         }
     }
-}
-
-int main() {
-    mainMenu();
-    return 0;
 }

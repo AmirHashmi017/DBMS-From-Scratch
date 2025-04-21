@@ -1,3 +1,4 @@
+// database_manager.h (updated)
 #ifndef DATABASE_MANAGER_H
 #define DATABASE_MANAGER_H
 
@@ -20,6 +21,23 @@
 // Define a generic record type that can hold different data types
 using FieldValue = std::variant<int, float, std::string, bool>;
 using Record = std::map<std::string, FieldValue>;
+
+// Comparison operators for FieldValue
+inline bool operator==(const FieldValue& lhs, const FieldValue& rhs) {
+    if (std::holds_alternative<int>(lhs) && std::holds_alternative<int>(rhs))
+        return std::get<int>(lhs) == std::get<int>(rhs);
+    else if (std::holds_alternative<float>(lhs) && std::holds_alternative<float>(rhs))
+        return std::get<float>(lhs) == std::get<float>(rhs);
+    else if (std::holds_alternative<std::string>(lhs) && std::holds_alternative<std::string>(rhs))
+        return std::get<std::string>(lhs) == std::get<std::string>(rhs);
+    else if (std::holds_alternative<bool>(lhs) && std::holds_alternative<bool>(rhs))
+        return std::get<bool>(lhs) == std::get<bool>(rhs);
+    return false;
+}
+
+inline bool operator!=(const FieldValue& lhs, const FieldValue& rhs) {
+    return !(lhs == rhs);
+}
 
 class DatabaseManager {
 public:
@@ -46,17 +64,21 @@ public:
     // Get schema for a specific table
     TableSchema getTableSchema(const std::string& table_name) const;
     std::vector<Record> getAllRecords(const std::string& table_name);
-    bool updateRecord(const std::string& table_name, const std::string& key_column,
-        const FieldValue& key_value, const Record& new_values);
-
-    bool deleteRecord(const std::string& table_name, const std::string& key_column,
-        const FieldValue& key_value);
-
-    std::vector<Record> searchRecordsAdvanced(
+    std::vector<Record> searchRecordsWithFilter(
         const std::string& table_name,
-        const std::vector<std::tuple<std::string, FieldValue, std::string>>& conditions);
+        const std::vector<std::tuple<std::string, std::string, FieldValue>>& conditions,
+        const std::vector<std::string>& operators);
 
-    // Database operations
+    bool updateRecordsWithFilter(
+        const std::string& table_name,
+        const std::map<std::string, FieldValue>& update_values,
+        const std::vector<std::tuple<std::string, std::string, FieldValue>>& conditions,
+        const std::vector<std::string>& operators);
+
+    int deleteRecordsWithFilter(
+        const std::string& table_name,
+        const std::vector<std::tuple<std::string, std::string, FieldValue>>& conditions,
+        const std::vector<std::string>& operators);
     bool createDatabase(const std::string& db_name);
     bool dropDatabase(const std::string& db_name);
     bool useDatabase(const std::string& db_name);
@@ -64,11 +86,13 @@ public:
     std::vector<std::string> listDatabases() const;
     std::string getCurrentDatabase() const;
 
+
+
 private:
     Catalog catalog;
     std::string catalog_path;
-    std::string current_database;
     std::map<std::string, BPlusTree*> indexes; // Map of table name to index
+    std::string current_database;
 
     // Helper methods
     Column::Type stringToColumnType(const std::string& type_str);
@@ -83,7 +107,13 @@ private:
 
     // Load existing indexes
     void loadIndexes();
-    
+    bool evaluateCondition(
+        const Record& record,
+        const std::vector<std::tuple<std::string, std::string, FieldValue>>& conditions,
+        const std::vector<std::string>& operators);
 };
+
+// Helper function for evaluating a single condition
+bool evaluateSingleCondition(const Record& record, const std::string& column, const std::string& op, const FieldValue& value);
 
 #endif
