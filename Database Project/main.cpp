@@ -1,4 +1,5 @@
 #include "database_manager.h"
+#include "query_parser.h"
 #include <iostream>
 #include <filesystem>
 #include <limits>
@@ -6,6 +7,9 @@
 #include <iomanip>  
 #include <variant> 
 #include <map> 
+#include <conio.h> // For _kbhit() and _getch()
+#include <windows.h> // For system("cls")
+
 void clearInputBuffer() {
     std::cin.clear();
     std::cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
@@ -860,11 +864,6 @@ void listTablesMenu(DatabaseManager& db) {
         }
     }
 }
-#include <iostream>
-#include <filesystem>
-#include <limits>
-#include <conio.h> // For _kbhit() and _getch()
-#include <windows.h> // For system("cls")
 
 // Function to clear the screen
 void clearScreen() {
@@ -1087,72 +1086,143 @@ void dropDatabaseMenu(DatabaseManager& db) {
         std::cout << "Failed to drop database '" << dbName << "'.\n";
     }
 }
-int main() {
-    // Create the database manager
-    DatabaseManager db("catalog.dat");
 
-    bool running = true;
-    while (running) {
-        std::cout << "\n=== Database Management System ===\n";
-        std::cout << "1. Create Table\n";
-        std::cout << "2. Insert Record\n";
-        std::cout << "3. Update Record\n";
-        std::cout << "4. Delete Record\n";
-        std::cout << "5. Display Records\n";
-        std::cout << "6. Search Records\n";
-        std::cout << "7. Create Database\n";
-        std::cout << "8. Drop Database\n";
-        std::cout << "9. Use Database\n";
-        std::cout << "10. Drop Table\n";
-        std::cout << "11. List Databases\n";
-        std::cout << "12. Exit\n";
-        std::cout << "Select an option: ";
+void executeQuery(DatabaseManager& db_manager, QueryParser& parser) {
+    clearScreen();
+    std::cout << "Query Executor (Type 'exit' to return to main menu)\n";
+    std::cout << "Type 'help' for available commands\n\n";
 
-        int choice;
-        std::cin >> choice;
-        clearInputBuffer();
+    std::string query;
+    while (true) {
+        std::cout << "DBMS> ";
+        std::getline(std::cin, query);
 
-        switch (choice) {
-        case 1:
-            createTableMenu(db);
+        if (query == "exit") {
             break;
-        case 2:
-            insertRecordMenu(db);
-            break;
-        case 3:
-            updateRecordsWithFilterMenu(db);
-            break;
-        case 4:
-            deleteRecordsWithFilterMenu(db);
-            break;
-        case 5:
-            displayRecordsMenu(db);
-            break;
-        case 6:
-            searchRecordsWithFilterMenu(db);
-            break;
-        case 7:
-            createDatabaseMenu(db);
-            break;
-        case 8:
-            dropDatabaseMenu(db);
-            break;
-        case 9:
-            useDatabaseMenu(db);
-            break;
-        case 10:
-            dropTableMenu(db);
-            break;
-        case 11:
-            listDatabasesMenu(db);
-            break;
-        case 12:
-            running = false;
-            std::cout << "Exiting program. Goodbye!\n";
-            break;
-        default:
-            std::cout << "Invalid choice. Please try again.\n";
-            break;
+        } else if (query == "help") {
+            std::cout << "\nAvailable Commands:\n";
+            std::cout << "CREATE DATABASE database_name\n";
+            std::cout << "DROP DATABASE database_name\n";
+            std::cout << "USE database_name\n";
+            std::cout << "SHOW DATABASES\n";
+            std::cout << "CREATE TABLE table_name (column1 type, column2 type, ...)\n";
+            std::cout << "DROP TABLE table_name\n";
+            std::cout << "SHOW TABLES\n";
+            std::cout << "INSERT INTO table_name VALUES (value1, value2, ...)\n";
+            std::cout << "SELECT * FROM table_name [WHERE condition]\n";
+            std::cout << "UPDATE table_name SET column = value [WHERE condition]\n";
+            std::cout << "DELETE FROM table_name [WHERE condition]\n\n";
+        } else if (!query.empty()) {
+            if (parser.parse(query)) {
+                if (parser.execute()) {
+                    std::cout << "Query executed successfully.\n";
+                } else {
+                    std::cout << "Error executing query.\n";
+                }
+            } else {
+                std::cout << "Invalid query syntax.\n";
+            }
         }
     }
+}
+
+int main() {
+    DatabaseManager db_manager;
+    QueryParser parser(db_manager);
+    
+    std::vector<std::string> menuOptions = {
+        "Create Table",
+        "Insert Record",
+        "Update Record",
+        "Delete Record",
+        "Display Records",
+        "Search Records",
+        "Create Database",
+        "Drop Database",
+        "Use Database",
+        "Drop Table",
+        "List Databases",
+        "Query Executor",
+        "Exit"
+    };
+
+    int currentSelection = 0;
+    bool running = true;
+
+    while (running) {
+        currentSelection = showMenu(menuOptions, currentSelection);
+
+        int key = _getch();
+        if (key == 224) { // Arrow key
+            key = _getch();
+            switch (key) {
+                case 72: // Up arrow
+                    currentSelection = (currentSelection - 1 + menuOptions.size()) % menuOptions.size();
+                    break;
+                case 80: // Down arrow
+                    currentSelection = (currentSelection + 1) % menuOptions.size();
+                    break;
+            }
+        } else if (key == 13) { // Enter key
+            clearScreen();
+            switch (currentSelection) {
+                case 0:
+                    createTableMenu(db_manager);
+                    break;
+                case 1:
+                    insertRecordMenu(db_manager);
+                    break;
+                case 2:
+                    updateRecordsWithFilterMenu(db_manager);
+                    break;
+                case 3:
+                    deleteRecordsWithFilterMenu(db_manager);
+                    break;
+                case 4:
+                    displayRecordsMenu(db_manager);
+                    break;
+                case 5:
+                    searchRecordsWithFilterMenu(db_manager);
+                    break;
+                case 6:
+                    createDatabaseMenu(db_manager);
+                    break;
+                case 7:
+                    dropDatabaseMenu(db_manager);
+                    break;
+                case 8:
+                    useDatabaseMenu(db_manager);
+                    break;
+                case 9:
+                    dropTableMenu(db_manager);
+                    break;
+                case 10:
+                    listDatabasesMenu(db_manager);
+                    break;
+                case 11:
+                    executeQuery(db_manager, parser);
+                    break;
+                case 12:
+                    running = false;
+                    std::cout << "Exiting program. Goodbye!\n";
+                    break;
+            }
+            if (running) {
+                std::cout << "\nPress any key to continue...";
+                _getch();
+            }
+        } else if (key >= '1' && key <= '9') {
+            int option = key - '1';
+            if (option < menuOptions.size()) {
+                currentSelection = option;
+            }
+        } else if (key == '0') {
+            int option = 9;
+            if (option < menuOptions.size()) {
+                currentSelection = option;
+            }
+        }
+    }
+
+    return 0;
 }

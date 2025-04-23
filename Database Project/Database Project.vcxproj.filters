@@ -30,6 +30,9 @@
     <ClInclude Include="database_manager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="query_parser.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -48,6 +51,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="DatabaseManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="query_parser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
