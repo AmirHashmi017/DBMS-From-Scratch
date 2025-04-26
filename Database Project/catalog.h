@@ -7,7 +7,7 @@
 // Enhanced TableSchema in catalog.h
 struct Column {
     std::string name;
-    enum Type { INT, FLOAT, STRING, CHAR, BOOL } type;
+    enum Type { INT, FLOAT, STRING, CHAR, BOOL, UNKNOWN } type;
     int length; // For strings and chars
     bool is_primary_key;
     bool is_foreign_key;

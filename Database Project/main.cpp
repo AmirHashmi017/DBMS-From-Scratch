@@ -10,6 +10,10 @@
 #include <conio.h> // For _kbhit() and _getch()
 #include <windows.h> // For system("cls")
 
+// Function declarations
+bool getYesNoInput(const std::string& prompt);
+int getNumericInput(const std::string& prompt);
+
 void clearInputBuffer() {
     std::cin.clear();
     std::cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
@@ -119,7 +123,6 @@ void searchRecordsWithFilterMenu(DatabaseManager& db) {
 
         case Column::STRING:
         case Column::CHAR: {
-            clearInputBuffer();  // Add this to clear any remaining input first
             std::string val;
             std::getline(std::cin, val);
             value = val;
@@ -272,7 +275,6 @@ void updateRecordsWithFilterMenu(DatabaseManager& db) {
 
         case Column::STRING:
         case Column::CHAR: {
-            clearInputBuffer();    // Add this line to fix string input
             std::string val;
             std::getline(std::cin, val);
             value = val;
@@ -487,7 +489,6 @@ void deleteRecordsWithFilterMenu(DatabaseManager& db) {
         }
         case Column::STRING:
         case Column::CHAR: {
-            clearInputBuffer();  // Add this to clear any remaining input first
             std::string val;
             std::getline(std::cin, val);
             value = val;
@@ -516,12 +517,7 @@ void deleteRecordsWithFilterMenu(DatabaseManager& db) {
     }
 
     // Confirm deletion
-    std::cout << "\nWARNING: This will delete all records matching your conditions.\n";
-    std::cout << "Are you sure you want to proceed? (y/n): ";
-    std::string confirm;
-    std::cin >> confirm;
-
-    if (confirm != "y" && confirm != "Y" && confirm != "yes" && confirm != "YES") {
+    if (!getYesNoInput("\nWARNING: This will delete all records matching your conditions.\nAre you sure you want to proceed?")) {
         std::cout << "Delete operation cancelled.\n";
         return;
     }
@@ -594,6 +590,14 @@ void createTableMenu(DatabaseManager& db) {
     std::cin >> tableName;
     clearInputBuffer();
 
+    // Check if table already exists
+    auto existingTables = db.listTables();
+    if (std::find(existingTables.begin(), existingTables.end(), tableName) != existingTables.end()) {
+        std::cout << "Error: A table with the name '" << tableName << "' already exists.\n";
+        std::cout << "Please choose a different table name.\n";
+        return;
+    }
+
     int numColumns;
     std::cout << "Enter number of columns: ";
     std::cin >> numColumns;
@@ -624,36 +628,83 @@ void createTableMenu(DatabaseManager& db) {
 
         columns.push_back(std::make_tuple(colName, colType, colLength));
 
-        std::cout << "Is this the primary key? (y/n): ";
-        char isPk;
-        std::cin >> isPk;
-        clearInputBuffer();
-
-        if (isPk == 'y' || isPk == 'Y') {
-            primaryKey = colName;
+        // Only ask about primary key if one hasn't been set yet
+        if (primaryKey.empty()) {
+            if (getYesNoInput("Is this the primary key?")) {
+                primaryKey = colName;
+            }
+        } else {
+            std::cout << "Primary key already set to '" << primaryKey << "'. Skipping primary key question.\n";
         }
 
-        std::cout << "Is this a foreign key? (y/n): ";
-        char isFk;
-        std::cin >> isFk;
-        clearInputBuffer();
-
-        if (isFk == 'y' || isFk == 'Y') {
+        if (getYesNoInput("Is this a foreign key?")) {
             std::string refTable, refColumn;
             std::cout << "Referenced table: ";
             std::cin >> refTable;
             clearInputBuffer();
 
+            // Check if referenced table exists
+            auto tables = db.listTables();
+            if (std::find(tables.begin(), tables.end(), refTable) == tables.end()) {
+                std::cout << "Error: Referenced table '" << refTable << "' does not exist.\n";
+                std::cout << "Foreign key constraint will not be set.\n";
+                continue;
+            }
+
             std::cout << "Referenced column: ";
             std::cin >> refColumn;
             clearInputBuffer();
 
-            foreignKeys[colName] = std::make_pair(refTable, refColumn);
+            // Check if referenced column exists in the table
+            try {
+                auto schema = db.getTableSchema(refTable);
+                bool columnExists = false;
+                for (const auto& col : schema.columns) {
+                    if (col.name == refColumn) {
+                        columnExists = true;
+                        break;
+                    }
+                }
+
+                if (!columnExists) {
+                    std::cout << "Error: Referenced column '" << refColumn << "' does not exist in table '" << refTable << "'.\n";
+                    std::cout << "Foreign key constraint will not be set.\n";
+                    continue;
+                }
+
+                // Check if the referenced column is a primary key
+                bool isPrimaryKey = false;
+                for (const auto& col : schema.columns) {
+                    if (col.name == refColumn && col.is_primary_key) {
+                        isPrimaryKey = true;
+                        break;
+                    }
+                }
+
+                if (!isPrimaryKey) {
+                    std::cout << "Error: Referenced column '" << refColumn << "' is not a primary key in table '" << refTable << "'.\n";
+                    std::cout << "Foreign keys must reference primary keys.\n";
+                    std::cout << "Foreign key constraint will not be set.\n";
+                    continue;
+                }
+
+                // If all checks pass, add the foreign key
+                foreignKeys[colName] = std::make_pair(refTable, refColumn);
+                std::cout << "Foreign key constraint set successfully.\n";
+            }
+            catch (...) {
+                std::cout << "Error: Could not verify foreign key constraint.\n";
+                std::cout << "Foreign key constraint will not be set.\n";
+            }
         }
     }
 
     if (primaryKey.empty()) {
         std::cout << "Warning: No primary key specified.\n";
+        if (!getYesNoInput("Do you want to continue without a primary key?")) {
+            std::cout << "Table creation cancelled.\n";
+            return;
+        }
     }
 
     bool success = db.createTable(tableName, columns, primaryKey, foreignKeys);
@@ -889,10 +940,10 @@ int showMenu(const std::vector<std::string>& options, int currentSelection) {
 
     for (int i = 0; i < options.size(); i++) {
         if (i == currentSelection) {
-            std::cout << " " << (i + 1) << ". " << options[i] << " " << selectedArrow << "\n";
+            std::cout << " " << (i + 1) << ". " << selectedArrow << " " << options[i] << "\n";
         }
         else {
-            std::cout << " " << (i + 1) << ". " << options[i] << " " << normalArrow << "\n";
+            std::cout << " " << (i + 1) << ". " << normalArrow << " " << options[i] << "\n";
         }
     }
 
@@ -1123,6 +1174,42 @@ void executeQuery(DatabaseManager& db_manager, QueryParser& parser) {
                 std::cout << "Invalid query syntax.\n";
             }
         }
+    }
+}
+
+// Function definitions
+bool getYesNoInput(const std::string& prompt) {
+    while (true) {
+        std::cout << prompt << " (y/n): ";
+        std::string input;
+        std::cin >> input;
+        clearInputBuffer();
+        
+        // Convert to lowercase for case-insensitive comparison
+        std::transform(input.begin(), input.end(), input.begin(), ::tolower);
+        
+        if (input == "y" || input == "yes") {
+            return true;
+        }
+        if (input == "n" || input == "no") {
+            return false;
+        }
+        
+        std::cout << "Invalid input. Please enter 'y' or 'n'.\n";
+    }
+}
+
+int getNumericInput(const std::string& prompt) {
+    int value;
+    while (true) {
+        std::cout << prompt;
+        if (std::cin >> value) {
+            clearInputBuffer();
+            return value;
+        }
+        std::cin.clear();
+        clearInputBuffer();
+        std::cout << "Invalid input. Please enter a number.\n";
     }
 }
 

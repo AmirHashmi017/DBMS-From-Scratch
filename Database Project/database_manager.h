@@ -11,6 +11,8 @@
 #include <fstream>
 #include <iostream>
 #include <filesystem>
+#include <shlobj.h>  // For SHGetKnownFolderPath
+#pragma comment(lib, "shell32.lib")  // Link with shell32.lib
 #ifdef _WIN32
 #include <windows.h> // For Windows systems
 #else
@@ -111,6 +113,7 @@ private:
         const Record& record,
         const std::vector<std::tuple<std::string, std::string, FieldValue>>& conditions,
         const std::vector<std::string>& operators);
+    std::filesystem::path getDatabasePath(const std::string& db_name);
 };
 
 // Helper function for evaluating a single condition
