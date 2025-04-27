@@ -1,0 +1,37 @@
+/* src/components/QueryEditor.css */
+.query-editor {
+    height: 100%;
+    display: flex;
+    width:80vw;
+    flex-direction: column;
+  }
+  
+  .toolbar {
+    padding: 0.5rem;
+    background: #edf2f7;
+    display: flex;
+    gap: 0.5rem;
+  }
+  
+  .toolbar button {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.6rem;
+    background: #4299e1;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    position: relative;
+    left:20px;
+  }
+  
+  .toolbar button:disabled {
+    background: #a0aec0;
+    cursor: not-allowed;
+  }
+  
+  .toolbar button:hover:not(:disabled) {
+    background: #3182ce;
+  }

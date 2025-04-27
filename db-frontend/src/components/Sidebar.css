@@ -1,0 +1,78 @@
+/* src/components/Sidebar.css */
+.sidebar {
+    height: 100%;
+    background: #2d3748;
+    color: white;
+    overflow-y: auto;
+  }
+  
+  .sidebar-header {
+    padding: 1rem;
+    border-bottom: 1px solid #4a5568;
+  }
+  
+  .sidebar-content {
+    padding: 0.5rem;
+  }
+  
+  .database {
+    margin-bottom: 1rem;
+  }
+  
+  .database-header {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  
+  .database-header:hover {
+    background: #4a5568;
+  }
+  
+  .table {
+    margin-left: 1rem;
+    margin-top: 0.5rem;
+    cursor: pointer;
+  }
+  
+  .table-header {
+    display: flex;
+    align-items: center;
+    padding: 0.3rem;
+  }
+  
+  .table-header:hover {
+    background: #4a5568;
+  }
+  
+  .columns {
+    margin-left: 1.5rem;
+  }
+  
+  .column {
+    display: flex;
+    align-items: center;
+    padding: 0.2rem;
+    font-size: 0.9rem;
+  }
+  
+  .column:hover {
+    background: #4a5568;
+  }
+  
+  .type {
+    margin-left: 0.5rem;
+    color: #a0aec0;
+    font-size: 0.8rem;
+  }
+  
+  .primary-key {
+    margin-left: 0.5rem;
+    color: #f6ad55;
+  }
+  
+  .icon {
+    margin-right: 0.5rem;
+  }
