@@ -99,6 +99,12 @@ bool DatabaseManager::createTable(
     const std::string& primary_key,
     const std::map<std::string, std::pair<std::string, std::string>>& foreign_keys) {
 
+    // Check if database is selected
+    if (current_database.empty()) {
+        std::cerr << "Error: No database selected. Use 'USE DATABASE' first." << std::endl;
+        return false;
+    }
+
     // Validate table name
     if (table_name.empty()) {
         std::cerr << "Error: Table name cannot be empty" << std::endl;
@@ -303,6 +309,16 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
                     std::cerr << "Error: Invalid data type for column '" << col_name << "'" << std::endl;
                     return false;
                 }
+                
+                // Check string length for STRING and CHAR types
+                if ((column.type == Column::STRING || column.type == Column::CHAR) && 
+                    std::holds_alternative<std::string>(value)) {
+                    const std::string& str_value = std::get<std::string>(value);
+                    if (str_value.length() > static_cast<size_t>(column.length)) {
+                        std::cerr << "Error: String length exceeds maximum length for column '" << col_name << "'" << std::endl;
+                        return false;
+                    }
+                }
                 break;
             }
         }
@@ -444,12 +460,7 @@ void DatabaseManager::serializeField(std::ofstream& file, const FieldValue& valu
         if (std::holds_alternative<std::string>(value)) {
             val = std::get<std::string>(value);
         }
-        // Truncate if string is too long
-        if (val.length() > static_cast<size_t>(column.length)) {
-            val = val.substr(0, column.length);
-        }
-        // Pad string to fit column length
-        val.resize(column.length, '\0');
+        // No truncation - length check is done in insertRecord
         int len = val.size();
         file.write(reinterpret_cast<const char*>(&len), sizeof(len));
         file.write(val.c_str(), len);
@@ -460,8 +471,7 @@ void DatabaseManager::serializeField(std::ofstream& file, const FieldValue& valu
         if (std::holds_alternative<std::string>(value)) {
             val = std::get<std::string>(value);
         }
-        // Truncate or pad string to fit column length
-        val.resize(column.length, '\0');
+        // No truncation - length check is done in insertRecord
         file.write(val.c_str(), column.length);
         break;
     }
@@ -1122,18 +1132,13 @@ std::filesystem::path DatabaseManager::getDatabasePath(const std::string& db_nam
         // Use the same db_data directory as in constructor
         std::filesystem::path dataDir = "db_data";
         
-        // Create the directory if it doesn't exist
+        // Create the data directory if it doesn't exist
         if (!std::filesystem::exists(dataDir)) {
             std::filesystem::create_directories(dataDir);
         }
         
-        // Create the database directory
-        std::filesystem::path dbDir = dataDir / db_name;
-        if (!std::filesystem::exists(dbDir)) {
-            std::filesystem::create_directories(dbDir);
-        }
-        
-        return dbDir;
+        // Return the database path without creating it
+        return dataDir / db_name;
     }
     catch (const std::filesystem::filesystem_error& e) {
         std::cerr << "Filesystem error in getDatabasePath: " << e.what() << std::endl;
@@ -1147,19 +1152,23 @@ std::filesystem::path DatabaseManager::getDatabasePath(const std::string& db_nam
 }
 
 bool DatabaseManager::dropDatabase(const std::string& db_name) {
-    std::string exePath = getExecutablePath();
-    std::filesystem::path dbDir = std::filesystem::path(exePath) / "data" / db_name;
+    std::filesystem::path dbDir = getDatabasePath(db_name);
 
     if (!std::filesystem::exists(dbDir)) {
         std::cerr << "Database '" << db_name << "' does not exist." << std::endl;
         return false;
     }
 
+    // If this is the current database, clear it
     if (current_database == db_name) {
         current_database.clear();
+        catalog.tables.clear();  // Clear the catalog
+        indexes.clear();         // Clear all indexes
+        catalog_path.clear();    // Clear catalog path
     }
 
     try {
+        // Remove all files and subdirectories
         std::filesystem::remove_all(dbDir);
         return true;
     }
@@ -1170,8 +1179,7 @@ bool DatabaseManager::dropDatabase(const std::string& db_name) {
 }
 
 bool DatabaseManager::useDatabase(const std::string& db_name) {
-    std::string exePath = getExecutablePath();
-    std::filesystem::path dbDir = std::filesystem::path(exePath) / "data" / db_name;
+    std::filesystem::path dbDir = getDatabasePath(db_name);
 
     if (!std::filesystem::exists(dbDir)) {
         std::cerr << "Database '" << db_name << "' does not exist." << std::endl;
@@ -1196,25 +1204,43 @@ bool DatabaseManager::dropTable(const std::string& table_name) {
         return false;
     }
 
-    // Remove table from catalog
-    if (!catalog.removeTable(table_name)) {
+    // Find the table schema
+    TableSchema schema;
+    bool found = false;
+    for (const auto& table : catalog.tables) {
+        if (table.name == table_name) {
+            schema = table;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
         std::cerr << "Table '" << table_name << "' does not exist." << std::endl;
         return false;
     }
 
     // Delete the table's data file
-    std::string exePath = getExecutablePath();
-    std::filesystem::path tableFile = std::filesystem::path(exePath) / "data" / current_database / (table_name + ".bin");
-
-    if (std::filesystem::exists(tableFile)) {
-        std::filesystem::remove(tableFile);
+    if (std::filesystem::exists(schema.data_file_path)) {
+        std::filesystem::remove(schema.data_file_path);
     }
 
-    // Remove and delete the index if it exists
+    // Delete the table's index file
+    if (std::filesystem::exists(schema.index_file_path)) {
+        std::filesystem::remove(schema.index_file_path);
+    }
+
+    // Remove and delete the index from memory
     auto it = indexes.find(table_name);
     if (it != indexes.end()) {
         delete it->second;
         indexes.erase(it);
+    }
+
+    // Remove table from catalog
+    if (!catalog.removeTable(table_name)) {
+        std::cerr << "Failed to remove table from catalog." << std::endl;
+        return false;
     }
 
     // Save the updated catalog
@@ -1225,8 +1251,7 @@ bool DatabaseManager::dropTable(const std::string& table_name) {
 
 std::vector<std::string> DatabaseManager::listDatabases() const {
     std::vector<std::string> databases;
-    std::string exePath = getExecutablePath();
-    std::filesystem::path dataDir = std::filesystem::path(exePath) / "data";
+    std::filesystem::path dataDir = "db_data";
 
     if (!std::filesystem::exists(dataDir)) {
         return databases;
