@@ -618,11 +618,11 @@ TableSchema DatabaseManager::getTableSchema(const std::string& table_name) const
 }
 
 Column::Type DatabaseManager::stringToColumnType(const std::string& type_str) {
-    if (type_str == "int") return Column::INT;
-    if (type_str == "float") return Column::FLOAT;
-    if (type_str == "string") return Column::STRING;
-    if (type_str == "char") return Column::CHAR;
-    if (type_str == "bool") return Column::BOOL;
+    if (type_str == "INT") return Column::INT;
+    if (type_str == "FLOAT") return Column::FLOAT;
+    if (type_str == "STRING") return Column::STRING;
+    if (type_str == "CHAR") return Column::CHAR;
+    if (type_str == "BOOL") return Column::BOOL;
 
     // Default to string
     std::cerr << "Unknown type '" << type_str << "', defaulting to STRING" << std::endl;

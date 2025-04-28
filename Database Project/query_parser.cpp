@@ -3,6 +3,7 @@
 #include <sstream>
 #include <cctype>
 #include <stdexcept>
+#include <iostream>
 
 QueryParser::QueryParser(DatabaseManager& db_manager) : db_manager(db_manager) {}
 
@@ -14,7 +15,29 @@ bool QueryParser::parse(const std::string& query_string) {
     std::string current_command;
     bool in_quotes = false;
     
-    for (char c : query_string) {
+    // Clean up the query string
+    std::string cleaned_query = query_string;
+    // Replace all types of newlines and whitespace sequences with a single space
+    for (size_t i = 0; i < cleaned_query.length(); ) {
+        if (cleaned_query[i] == '\r' || cleaned_query[i] == '\n' || cleaned_query[i] == '\t') {
+            cleaned_query[i] = ' ';
+            i++;
+        } else if (cleaned_query[i] == ' ' && i + 1 < cleaned_query.length() && cleaned_query[i + 1] == ' ') {
+            cleaned_query.erase(i, 1);
+        } else {
+            i++;
+        }
+    }
+    
+    // Trim leading/trailing spaces
+    while (!cleaned_query.empty() && cleaned_query[0] == ' ') {
+        cleaned_query.erase(0, 1);
+    }
+    while (!cleaned_query.empty() && cleaned_query.back() == ' ') {
+        cleaned_query.pop_back();
+    }
+    
+    for (char c : cleaned_query) {
         if (c == '\'') {
             in_quotes = !in_quotes;
             current_command += c;
@@ -101,11 +124,8 @@ bool QueryParser::parse(const std::string& query_string) {
 }
 
 bool QueryParser::execute() {
-    // Store the original query type
-    QueryType original_type = current_query.type;
     bool success = true;
 
-    // Execute each command in sequence
     for (const auto& cmd : commands) {
         std::vector<std::string> tokens = tokenize(cmd);
         if (tokens.empty()) continue;
@@ -126,6 +146,7 @@ bool QueryParser::execute() {
             } else if (object == "TABLE") {
                 current_query.type = QueryType::CREATE_TABLE;
                 if (!parseCreateTable(tokens)) return false;
+                std::cout << "Executing createTable with primary_key: '" << current_query.primary_key << "'" << std::endl;
                 success &= db_manager.createTable(
                     current_query.table_name,
                     current_query.columns,
@@ -191,7 +212,7 @@ bool QueryParser::execute() {
                 
                 for (const auto& cond : current_query.conditions) {
                     conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
-                    operators.push_back("AND");
+                    operators.push_back(cond.op == "NOT" ? "NOT" : "AND");
                 }
                 
                 results = db_manager.searchRecordsWithFilter(
@@ -218,7 +239,7 @@ bool QueryParser::execute() {
             
             for (const auto& cond : current_query.conditions) {
                 conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
-                operators.push_back("AND");
+                operators.push_back(cond.op == "NOT" ? "NOT" : "AND");
             }
             
             success &= db_manager.updateRecordsWithFilter(
@@ -235,48 +256,58 @@ bool QueryParser::execute() {
             
             for (const auto& cond : current_query.conditions) {
                 conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
-                operators.push_back("AND");
+                operators.push_back(cond.op == "NOT" ? "NOT" : "AND");
             }
             
             success &= db_manager.deleteRecordsWithFilter(
                 current_query.table_name,
                 conditions,
                 operators
-            ) > 0;
+            ) >= 0;
         }
     }
     
-    // Restore the original query type
-    current_query.type = original_type;
     return success;
 }
 
-// Helper method implementations
+// Parsing methods
 bool QueryParser::parseCreateDatabase(const std::vector<std::string>& tokens) {
-    if (tokens.size() != 3) return false;
+    if (tokens.size() != 3) {
+        std::cerr << "Error: Invalid CREATE DATABASE syntax" << std::endl;
+        return false;
+    }
     current_query.database_name = tokens[2];
     return true;
 }
 
 bool QueryParser::parseDropDatabase(const std::vector<std::string>& tokens) {
-    if (tokens.size() != 3) return false;
+    if (tokens.size() != 3) {
+        std::cerr << "Error: Invalid DROP DATABASE syntax" << std::endl;
+        return false;
+    }
     current_query.database_name = tokens[2];
     return true;
 }
 
 bool QueryParser::parseUseDatabase(const std::vector<std::string>& tokens) {
-    if (tokens.size() != 2) return false;
+    if (tokens.size() != 2) {
+        std::cerr << "Error: Invalid USE DATABASE syntax" << std::endl;
+        return false;
+    }
     current_query.database_name = tokens[1];
     return true;
 }
 
 bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
-    if (tokens.size() < 4) return false; // Minimum: CREATE TABLE name (columns...)
+    if (tokens.size() < 4) {
+        std::cerr << "Error: Invalid CREATE TABLE syntax" << std::endl;
+        return false;
+    }
     
     current_query.type = QueryType::CREATE_TABLE;
     current_query.table_name = tokens[2];
     
-    // Parse column definitions
+    // Parse column definitions and constraints
     std::vector<std::tuple<std::string, std::string, int>> columns;
     std::string primary_key;
     std::map<std::string, std::pair<std::string, std::string>> foreign_keys;
@@ -286,71 +317,155 @@ bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
     while (i < tokens.size() && tokens[i] != "(") {
         i++;
     }
-    if (i >= tokens.size()) return false;
+    if (i >= tokens.size()) {
+        std::cerr << "Error: Expected '(' after table name" << std::endl;
+        return false;
+    }
     i++; // Skip the opening parenthesis
     
     std::string current_col_name;
     std::string current_col_type;
-    int current_col_length = 0;
+    int current_col_length = 0; // Default to 0 (no length specified)
     bool is_primary_key = false;
+    
+    // Debug: Print tokens for inspection
+    std::cout << "Tokens for CREATE TABLE: ";
+    for (const auto& token : tokens) {
+        std::cout << "'" << token << "' ";
+    }
+    std::cout << std::endl;
     
     while (i < tokens.size() && tokens[i] != ")") {
         std::string token = tokens[i];
-        std::transform(token.begin(), token.end(), token.begin(), ::toupper);
-        
-        if (token == ",") {
-            if (!current_col_name.empty() && !current_col_type.empty()) {
-                columns.push_back(std::make_tuple(current_col_name, current_col_type, current_col_length));
-                if (is_primary_key) {
-                    primary_key = current_col_name;
-                    is_primary_key = false;
-                }
-                current_col_name = "";
-                current_col_type = "";
-                current_col_length = 0;
-            }
+        if (token.empty()) {
             i++;
             continue;
         }
         
-        if (token == "PRIMARY" && i + 1 < tokens.size() && tokens[i + 1] == "KEY") {
-            is_primary_key = true;
-            i += 2; // Skip PRIMARY KEY
+        std::string token_upper = token;
+        std::transform(token_upper.begin(), token_upper.end(), token_upper.begin(), ::toupper);
+        
+        // Handle PRIMARY KEY declaration
+        if (token_upper == "PRIMARY" && i + 3 < tokens.size() && 
+            tokens[i + 1] == "KEY" && tokens[i + 2] == "(") {
+            if (tokens[i + 3] == ")") {
+                std::cerr << "Error: PRIMARY KEY column name missing" << std::endl;
+                return false;
+            }
+            primary_key = tokens[i + 3];
+            std::cout << "Found PRIMARY KEY: " << primary_key << std::endl;
+            i += 5; // Skip PRIMARY KEY (column_name)
+            if (i < tokens.size() && tokens[i] == ",") {
+                i++; // Skip comma if present
+            }
             continue;
         }
         
-        // If we don't have a column name yet, this is the column name
+        // Handle FOREIGN KEY constraint
+        if (token_upper == "FOREIGN" && i + 6 < tokens.size() && 
+            tokens[i + 1] == "KEY" && tokens[i + 2] == "(" && tokens[i + 4] == ")" && 
+            tokens[i + 5] == "REFERENCES") {
+            std::string local_column = tokens[i + 3];
+            std::string ref_table = tokens[i + 6];
+            std::string ref_column;
+            
+            if (i + 9 < tokens.size() && tokens[i + 7] == "(" && tokens[i + 9] == ")") {
+                ref_column = tokens[i + 8];
+                i += 10; // Skip FOREIGN KEY (col) REFERENCES table(col)
+            } else {
+                ref_column = local_column; // Default to same column name
+                i += 7; // Skip FOREIGN KEY (col) REFERENCES table
+            }
+            
+            foreign_keys[local_column] = std::make_pair(ref_table, ref_column);
+            if (i < tokens.size() && tokens[i] == ",") {
+                i++; // Skip comma if present
+            }
+            continue;
+        }
+        
+        // Handle column definition
         if (current_col_name.empty()) {
             current_col_name = token;
+            i++;
+            continue;
         }
-        // If we have a column name but no type, this is the type
-        else if (current_col_type.empty()) {
-            current_col_type = token;
-            if (current_col_type == "STRING" || current_col_type == "CHAR") {
-                if (i + 2 < tokens.size() && tokens[i + 1] == "(") {
-                    try {
-                        current_col_length = std::stoi(tokens[i + 2]);
-                        i += 3; // Skip the length and parentheses
-                    } catch (...) {
-                        return false;
+        
+        if (current_col_type.empty()) {
+            current_col_type = token_upper;
+            // Handle types with length specifications (STRING, CHAR)
+            if ((current_col_type == "STRING" || current_col_type == "CHAR") && 
+                i + 3 < tokens.size() && tokens[i + 1] == "(" && tokens[i + 3] == ")") {
+                try {
+                    current_col_length = std::stoi(tokens[i + 2]);
+                    i += 4; // Skip type ( length )
+                } catch (...) {
+                    std::cerr << "Error: Invalid length for " << current_col_type << std::endl;
+                    return false;
+                }
+            } else {
+                i++; // Skip type
+            }
+            
+            // Look ahead for PRIMARY KEY or comma
+            if (i < tokens.size()) {
+                std::string next_token = tokens[i];
+                std::transform(next_token.begin(), next_token.end(), next_token.begin(), ::toupper);
+                
+                if (next_token == "PRIMARY" && i + 1 < tokens.size() && tokens[i + 1] == "KEY") {
+                    is_primary_key = true;
+                    i += 2; // Skip PRIMARY KEY
+                }
+                
+                if (i < tokens.size() && (tokens[i] == "," || tokens[i] == ")")) {
+                    // End of column definition
+                    columns.push_back(std::make_tuple(current_col_name, current_col_type, current_col_length));
+                    if (is_primary_key) {
+                        primary_key = current_col_name;
+                        is_primary_key = false;
+                    }
+                    std::cout << "Added column: " << current_col_name << " " << current_col_type 
+                              << (current_col_length > 0 ? "(" + std::to_string(current_col_length) + ")" : "") << std::endl;
+                    current_col_name.clear();
+                    current_col_type.clear();
+                    current_col_length = 0;
+                    if (tokens[i] == ",") {
+                        i++; // Skip comma
                     }
                 }
             }
+            continue;
         }
         
         i++;
     }
     
-    // Add the last column if there is one
+    // Add the last column if it exists and hasn't been added
     if (!current_col_name.empty() && !current_col_type.empty()) {
         columns.push_back(std::make_tuple(current_col_name, current_col_type, current_col_length));
         if (is_primary_key) {
             primary_key = current_col_name;
         }
+        std::cout << "Added final column: " << current_col_name << " " << current_col_type 
+                  << (current_col_length > 0 ? "(" + std::to_string(current_col_length) + ")" : "") << std::endl;
     }
     
     if (columns.empty()) {
-        return false; // Table must have at least one column
+        std::cerr << "Error: No columns defined for table" << std::endl;
+        return false;
+    }
+    
+    // Validate primary key
+    bool pk_found = false;
+    for (const auto& col : columns) {
+        if (std::get<0>(col) == primary_key) {
+            pk_found = true;
+            break;
+        }
+    }
+    if (!primary_key.empty() && !pk_found) {
+        std::cerr << "Error: Primary key column '" << primary_key << "' not found in column definitions" << std::endl;
+        return false;
     }
     
     current_query.columns = columns;
@@ -358,10 +473,16 @@ bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
     current_query.foreign_keys = foreign_keys;
     
     // Debug output
+    std::cout << "Parsed CREATE TABLE command:" << std::endl;
+    std::cout << "Table name: " << current_query.table_name << std::endl;
     std::cout << "Primary key: " << primary_key << std::endl;
-    std::cout << "Columns: " << columns.size() << std::endl;
+    std::cout << "Columns:" << std::endl;
     for (const auto& col : columns) {
-        std::cout << "Column: " << std::get<0>(col) << " " << std::get<1>(col) << " " << std::get<2>(col) << std::endl;
+        std::cout << "  " << std::get<0>(col) << " " << std::get<1>(col);
+        if (std::get<2>(col) > 0) {
+            std::cout << "(" << std::get<2>(col) << ")";
+        }
+        std::cout << std::endl;
     }
     std::cout << "Foreign keys: " << foreign_keys.size() << std::endl;
     
@@ -369,13 +490,19 @@ bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
 }
 
 bool QueryParser::parseDropTable(const std::vector<std::string>& tokens) {
-    if (tokens.size() != 3) return false;
+    if (tokens.size() != 3) {
+        std::cerr << "Error: Invalid DROP TABLE syntax" << std::endl;
+        return false;
+    }
     current_query.table_name = tokens[2];
     return true;
 }
 
 bool QueryParser::parseInsert(const std::vector<std::string>& tokens) {
-    if (tokens.size() < 6) return false; // Minimum: INSERT INTO table VALUES (values...)
+    if (tokens.size() < 6) {
+        std::cerr << "Error: Invalid INSERT syntax" << std::endl;
+        return false;
+    }
     
     current_query.type = QueryType::INSERT;
     current_query.table_name = tokens[2];
@@ -386,10 +513,9 @@ bool QueryParser::parseInsert(const std::vector<std::string>& tokens) {
     int value_index = 0;
     
     // Get table schema to map values to column names
-    TableSchema schema;
-    try {
-        schema = db_manager.getTableSchema(current_query.table_name);
-    } catch (...) {
+    TableSchema schema = db_manager.getTableSchema(current_query.table_name);
+    if (schema.name.empty()) {
+        std::cerr << "Error: Table '" << current_query.table_name << "' does not exist" << std::endl;
         return false;
     }
     
@@ -407,13 +533,13 @@ bool QueryParser::parseInsert(const std::vector<std::string>& tokens) {
         
         if (in_parentheses && token != ",") {
             if (value_index >= schema.columns.size()) {
-                return false; // Too many values
+                std::cerr << "Error: Too many values for table '" << current_query.table_name << "'" << std::endl;
+                return false;
             }
             
             const std::string& column_name = schema.columns[value_index].name;
             Column::Type column_type = schema.columns[value_index].type;
             
-            // Try to determine the type of the value
             try {
                 switch (column_type) {
                     case Column::INT: {
@@ -428,11 +554,11 @@ bool QueryParser::parseInsert(const std::vector<std::string>& tokens) {
                     }
                     case Column::STRING:
                     case Column::CHAR: {
-                        // Remove quotes if present
-                        if (token.front() == '\'' && token.back() == '\'') {
-                            token = token.substr(1, token.length() - 2);
+                        std::string str_val = token;
+                        if (str_val.front() == '\'' && str_val.back() == '\'') {
+                            str_val = str_val.substr(1, str_val.length() - 2);
                         }
-                        values[column_name] = token;
+                        values[column_name] = str_val;
                         break;
                     }
                     case Column::BOOL: {
@@ -443,13 +569,15 @@ bool QueryParser::parseInsert(const std::vector<std::string>& tokens) {
                 }
                 value_index++;
             } catch (...) {
+                std::cerr << "Error: Invalid value '" << token << "' for column '" << column_name << "'" << std::endl;
                 return false;
             }
         }
     }
     
     if (value_index != schema.columns.size()) {
-        return false; // Not enough values
+        std::cerr << "Error: Incorrect number of values for table '" << current_query.table_name << "'" << std::endl;
+        return false;
     }
     
     current_query.values = values;
@@ -457,13 +585,19 @@ bool QueryParser::parseInsert(const std::vector<std::string>& tokens) {
 }
 
 bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
-    if (tokens.size() < 4) return false; // Minimum: SELECT * FROM table
+    if (tokens.size() < 4) {
+        std::cerr << "Error: Invalid SELECT syntax" << std::endl;
+        return false;
+    }
     
     current_query.type = QueryType::SELECT;
     
     // Parse column list
     size_t from_pos = std::find(tokens.begin(), tokens.end(), "FROM") - tokens.begin();
-    if (from_pos == tokens.size()) return false;
+    if (from_pos == tokens.size()) {
+        std::cerr << "Error: Missing FROM clause" << std::endl;
+        return false;
+    }
     
     current_query.table_name = tokens[from_pos + 1];
     
@@ -500,14 +634,20 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
 }
 
 bool QueryParser::parseUpdate(const std::vector<std::string>& tokens) {
-    if (tokens.size() < 6) return false; // Minimum: UPDATE table SET column = value
+    if (tokens.size() < 6) {
+        std::cerr << "Error: Invalid UPDATE syntax" << std::endl;
+        return false;
+    }
     
     current_query.type = QueryType::UPDATE;
     current_query.table_name = tokens[1];
     
     // Find SET keyword
     size_t set_pos = std::find(tokens.begin(), tokens.end(), "SET") - tokens.begin();
-    if (set_pos == tokens.size()) return false;
+    if (set_pos == tokens.size()) {
+        std::cerr << "Error: Missing SET clause" << std::endl;
+        return false;
+    }
     
     // Parse SET assignments
     std::map<std::string, FieldValue> values;
@@ -553,7 +693,10 @@ bool QueryParser::parseUpdate(const std::vector<std::string>& tokens) {
 }
 
 bool QueryParser::parseDelete(const std::vector<std::string>& tokens) {
-    if (tokens.size() < 3) return false; // Minimum: DELETE FROM table
+    if (tokens.size() < 3) {
+        std::cerr << "Error: Invalid DELETE syntax" << std::endl;
+        return false;
+    }
     
     current_query.type = QueryType::DELETE_OP;
     current_query.table_name = tokens[2];
@@ -590,6 +733,7 @@ bool QueryParser::parseDelete(const std::vector<std::string>& tokens) {
     return true;
 }
 
+// Helper methods
 std::vector<std::string> QueryParser::tokenize(const std::string& query) {
     std::vector<std::string> tokens;
     std::string current_token;
@@ -617,23 +761,43 @@ std::vector<std::string> QueryParser::tokenize(const std::string& query) {
         cleaned_query.pop_back();
     }
     
-    for (char c : cleaned_query) {
+    // Enhanced tokenization to handle delimiters
+    for (size_t i = 0; i < cleaned_query.length(); ) {
+        char c = cleaned_query[i];
+        
         if (c == '\'') {
             in_quotes = !in_quotes;
             current_token += c;
-        } else if (isspace(c) && !in_quotes) {
+            i++;
+        } else if (!in_quotes && (c == '(' || c == ')' || c == ',' || c == ';')) {
             if (!current_token.empty()) {
                 tokens.push_back(current_token);
                 current_token.clear();
             }
+            tokens.push_back(std::string(1, c));
+            i++;
+        } else if (!in_quotes && isspace(c)) {
+            if (!current_token.empty()) {
+                tokens.push_back(current_token);
+                current_token.clear();
+            }
+            i++;
         } else {
             current_token += c;
+            i++;
         }
     }
     
     if (!current_token.empty()) {
         tokens.push_back(current_token);
     }
+    
+    // Debug: Print tokens
+    std::cout << "Tokenized query: ";
+    for (const auto& token : tokens) {
+        std::cout << "'" << token << "' ";
+    }
+    std::cout << std::endl;
     
     return tokens;
 }
@@ -672,4 +836,4 @@ Column::Type QueryParser::parseColumnType(const std::string& type_str) {
     if (type == "BOOL") return Column::BOOL;
     
     throw std::runtime_error("Unknown column type: " + type_str);
-} 
+}

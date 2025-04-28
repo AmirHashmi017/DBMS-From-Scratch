@@ -4,11 +4,12 @@
 #include "database_manager.h"
 #include <string>
 #include <vector>
-#include <variant>
 #include <map>
-#include <memory>
+#include <variant>
+#include <tuple>
 
-// Define query types
+using FieldValue = std::variant<int, float, std::string, bool>;
+
 enum class QueryType {
     CREATE_DATABASE,
     DROP_DATABASE,
@@ -17,33 +18,28 @@ enum class QueryType {
     CREATE_TABLE,
     DROP_TABLE,
     SHOW_TABLES,
-    DESCRIBE_TABLE,
     INSERT,
     SELECT,
     UPDATE,
-    DELETE_OP,
-    UNKNOWN
+    DELETE_OP
 };
 
-// Define condition structure
 struct Condition {
     std::string column;
     std::string op;
-    std::variant<int, float, std::string, bool> value;
+    FieldValue value;
 };
 
-// Define query structure
 struct Query {
     QueryType type;
     std::string database_name;
     std::string table_name;
-    std::vector<std::tuple<std::string, std::string, int>> columns; // For CREATE TABLE
-    std::string primary_key;  // Changed from vector to string
-    std::map<std::string, std::pair<std::string, std::string>> foreign_keys;  // Changed from vector to map
-    std::vector<std::string> select_columns; // For SELECT
-    std::vector<Condition> conditions; // For WHERE clauses
-    std::vector<std::string> condition_operators;  // Added for AND/OR/NOT operators
-    std::map<std::string, std::variant<int, float, std::string, bool>> values; // For INSERT and UPDATE
+    std::vector<std::tuple<std::string, std::string, int>> columns; // name, type, length
+    std::string primary_key;
+    std::map<std::string, std::pair<std::string, std::string>> foreign_keys; // col -> (ref_table, ref_col)
+    std::map<std::string, FieldValue> values;
+    std::vector<Condition> conditions;
+    std::vector<std::string> condition_operators;
 };
 
 class QueryParser {
@@ -54,10 +50,10 @@ public:
 
 private:
     DatabaseManager& db_manager;
-    Query current_query;
     std::vector<std::string> commands;
+    Query current_query;
 
-    // Parsing helper methods
+    // Parsing methods
     bool parseCreateDatabase(const std::vector<std::string>& tokens);
     bool parseDropDatabase(const std::vector<std::string>& tokens);
     bool parseUseDatabase(const std::vector<std::string>& tokens);
@@ -67,10 +63,11 @@ private:
     bool parseSelect(const std::vector<std::string>& tokens);
     bool parseUpdate(const std::vector<std::string>& tokens);
     bool parseDelete(const std::vector<std::string>& tokens);
-    bool parseConditions(const std::vector<std::string>& tokens, size_t& index);
-    std::variant<int, float, std::string, bool> parseValue(const std::string& value_str);
-    Column::Type parseColumnType(const std::string& type_str);
+
+    // Helper methods
     std::vector<std::string> tokenize(const std::string& query);
+    FieldValue parseValue(const std::string& value_str);
+    Column::Type parseColumnType(const std::string& type_str);
 };
 
-#endif // QUERY_PARSER_H 
+#endif // QUERY_PARSER_H

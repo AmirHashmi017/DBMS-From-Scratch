@@ -62,7 +62,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 8,
+          "SelectedChildIndex": 7,
           "Children": [
             {
               "$type": "Bookmark",
@@ -77,10 +77,6 @@
               "Name": "ST:1:0:{d212f56b-c48a-434c-a121-1c5d80b59b9f}"
             },
             {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
-            },
-            {
               "$type": "Document",
               "DocumentIndex": 1,
               "Title": "DatabaseManager.cpp",
@@ -90,8 +86,7 @@
               "RelativeToolTip": "DatabaseManager.cpp",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAsAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-03-23T09:27:33.258Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-03-23T09:27:33.258Z"
             },
             {
               "$type": "Document",
@@ -137,7 +132,7 @@
               "RelativeDocumentMoniker": "bptree.cpp",
               "ToolTip": "D:\\Github Repos\\Database Project\\Database Project\\bptree.cpp",
               "RelativeToolTip": "bptree.cpp",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA8AAAAFAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABUAAAAaAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
               "WhenOpened": "2025-03-23T09:24:42.941Z",
               "EditorCaption": ""
