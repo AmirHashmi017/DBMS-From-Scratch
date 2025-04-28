@@ -1,0 +1,10 @@
+^D:\GITHUB REPOS\DATABASE PROJECT\DATABASE PROJECT\BUILD\CMAKEFILES\DBFD21B4DEBEE25951505B6FB112F91D\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SD:/Github Repos/Database Project/Database Project" "-BD:/Github Repos/Database Project/Database Project/build" --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file "D:/Github Repos/Database Project/Database Project/build/Database.sln"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

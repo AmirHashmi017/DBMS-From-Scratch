@@ -7,108 +7,181 @@
 QueryParser::QueryParser(DatabaseManager& db_manager) : db_manager(db_manager) {}
 
 bool QueryParser::parse(const std::string& query_string) {
-    std::vector<std::string> tokens = tokenize(query_string);
-    if (tokens.empty()) return false;
-
-    // Convert first token to uppercase for case-insensitive comparison
-    std::string command = tokens[0];
-    std::transform(command.begin(), command.end(), command.begin(), ::toupper);
-
-    if (command == "CREATE") {
-        if (tokens.size() < 2) return false;
-        std::string object = tokens[1];
-        std::transform(object.begin(), object.end(), object.begin(), ::toupper);
-        
-        if (object == "DATABASE") {
-            current_query.type = QueryType::CREATE_DATABASE;
-            return parseCreateDatabase(tokens);
-        } else if (object == "TABLE") {
-            current_query.type = QueryType::CREATE_TABLE;
-            return parseCreateTable(tokens);
+    // Clear any existing commands
+    commands.clear();
+    
+    // Split the query into individual commands by semicolon
+    std::string current_command;
+    bool in_quotes = false;
+    
+    for (char c : query_string) {
+        if (c == '\'') {
+            in_quotes = !in_quotes;
+            current_command += c;
+        } else if (c == ';' && !in_quotes) {
+            if (!current_command.empty()) {
+                commands.push_back(current_command);
+                current_command.clear();
+            }
+        } else {
+            current_command += c;
         }
-    } else if (command == "DROP") {
-        if (tokens.size() < 2) return false;
-        std::string object = tokens[1];
-        std::transform(object.begin(), object.end(), object.begin(), ::toupper);
-        
-        if (object == "DATABASE") {
-            current_query.type = QueryType::DROP_DATABASE;
-            return parseDropDatabase(tokens);
-        } else if (object == "TABLE") {
-            current_query.type = QueryType::DROP_TABLE;
-            return parseDropTable(tokens);
-        }
-    } else if (command == "USE") {
-        current_query.type = QueryType::USE_DATABASE;
-        return parseUseDatabase(tokens);
-    } else if (command == "SHOW") {
-        if (tokens.size() < 2) return false;
-        std::string object = tokens[1];
-        std::transform(object.begin(), object.end(), object.begin(), ::toupper);
-        
-        if (object == "DATABASES") {
-            current_query.type = QueryType::SHOW_DATABASES;
-            return true;
-        } else if (object == "TABLES") {
-            current_query.type = QueryType::SHOW_TABLES;
-            return true;
-        }
-    } else if (command == "INSERT") {
-        current_query.type = QueryType::INSERT;
-        return parseInsert(tokens);
-    } else if (command == "SELECT") {
-        current_query.type = QueryType::SELECT;
-        return parseSelect(tokens);
-    } else if (command == "UPDATE") {
-        current_query.type = QueryType::UPDATE;
-        return parseUpdate(tokens);
-    } else if (command == "DELETE") {
-        current_query.type = QueryType::DELETE_OP;
-        return parseDelete(tokens);
     }
+    
+    // Add the last command if there is one
+    if (!current_command.empty()) {
+        commands.push_back(current_command);
+    }
+    
+    // Process each command
+    bool all_success = true;
+    for (const auto& cmd : commands) {
+        std::vector<std::string> tokens = tokenize(cmd);
+        if (tokens.empty()) continue;
 
-    return false;
+        // Convert first token to uppercase for case-insensitive comparison
+        std::string command = tokens[0];
+        std::transform(command.begin(), command.end(), command.begin(), ::toupper);
+
+        if (command == "CREATE") {
+            if (tokens.size() < 2) return false;
+            std::string object = tokens[1];
+            std::transform(object.begin(), object.end(), object.begin(), ::toupper);
+            
+            if (object == "DATABASE") {
+                current_query.type = QueryType::CREATE_DATABASE;
+                all_success &= parseCreateDatabase(tokens);
+            } else if (object == "TABLE") {
+                current_query.type = QueryType::CREATE_TABLE;
+                all_success &= parseCreateTable(tokens);
+            }
+        } else if (command == "DROP") {
+            if (tokens.size() < 2) return false;
+            std::string object = tokens[1];
+            std::transform(object.begin(), object.end(), object.begin(), ::toupper);
+            
+            if (object == "DATABASE") {
+                current_query.type = QueryType::DROP_DATABASE;
+                all_success &= parseDropDatabase(tokens);
+            } else if (object == "TABLE") {
+                current_query.type = QueryType::DROP_TABLE;
+                all_success &= parseDropTable(tokens);
+            }
+        } else if (command == "USE") {
+            current_query.type = QueryType::USE_DATABASE;
+            all_success &= parseUseDatabase(tokens);
+        } else if (command == "SHOW") {
+            if (tokens.size() < 2) return false;
+            std::string object = tokens[1];
+            std::transform(object.begin(), object.end(), object.begin(), ::toupper);
+            
+            if (object == "DATABASES") {
+                current_query.type = QueryType::SHOW_DATABASES;
+                all_success &= true;
+            } else if (object == "TABLES") {
+                current_query.type = QueryType::SHOW_TABLES;
+                all_success &= true;
+            }
+        } else if (command == "INSERT") {
+            current_query.type = QueryType::INSERT;
+            all_success &= parseInsert(tokens);
+        } else if (command == "SELECT") {
+            current_query.type = QueryType::SELECT;
+            all_success &= parseSelect(tokens);
+        } else if (command == "UPDATE") {
+            current_query.type = QueryType::UPDATE;
+            all_success &= parseUpdate(tokens);
+        } else if (command == "DELETE") {
+            current_query.type = QueryType::DELETE_OP;
+            all_success &= parseDelete(tokens);
+        }
+    }
+    
+    return all_success;
 }
 
 bool QueryParser::execute() {
-    switch (current_query.type) {
-        case QueryType::CREATE_DATABASE:
-            return db_manager.createDatabase(current_query.database_name);
-        case QueryType::DROP_DATABASE:
-            return db_manager.dropDatabase(current_query.database_name);
-        case QueryType::USE_DATABASE:
-            return db_manager.useDatabase(current_query.database_name);
-        case QueryType::SHOW_DATABASES: {
-            auto databases = db_manager.listDatabases();
-            for (const auto& db : databases) {
-                std::cout << db << std::endl;
+    // Store the original query type
+    QueryType original_type = current_query.type;
+    bool success = true;
+
+    // Execute each command in sequence
+    for (const auto& cmd : commands) {
+        std::vector<std::string> tokens = tokenize(cmd);
+        if (tokens.empty()) continue;
+
+        // Convert first token to uppercase for case-insensitive comparison
+        std::string command = tokens[0];
+        std::transform(command.begin(), command.end(), command.begin(), ::toupper);
+
+        if (command == "CREATE") {
+            if (tokens.size() < 2) return false;
+            std::string object = tokens[1];
+            std::transform(object.begin(), object.end(), object.begin(), ::toupper);
+            
+            if (object == "DATABASE") {
+                current_query.type = QueryType::CREATE_DATABASE;
+                if (!parseCreateDatabase(tokens)) return false;
+                success &= db_manager.createDatabase(current_query.database_name);
+            } else if (object == "TABLE") {
+                current_query.type = QueryType::CREATE_TABLE;
+                if (!parseCreateTable(tokens)) return false;
+                success &= db_manager.createTable(
+                    current_query.table_name,
+                    current_query.columns,
+                    current_query.primary_key,
+                    current_query.foreign_keys
+                );
             }
-            return true;
-        }
-        case QueryType::CREATE_TABLE:
-            return db_manager.createTable(
-                current_query.table_name,
-                current_query.columns,
-                current_query.primary_key,
-                current_query.foreign_keys
-            );
-        case QueryType::DROP_TABLE:
-            return db_manager.dropTable(current_query.table_name);
-        case QueryType::SHOW_TABLES: {
-            auto tables = db_manager.listTables();
-            for (const auto& table : tables) {
-                std::cout << table << std::endl;
+        } else if (command == "DROP") {
+            if (tokens.size() < 2) return false;
+            std::string object = tokens[1];
+            std::transform(object.begin(), object.end(), object.begin(), ::toupper);
+            
+            if (object == "DATABASE") {
+                current_query.type = QueryType::DROP_DATABASE;
+                if (!parseDropDatabase(tokens)) return false;
+                success &= db_manager.dropDatabase(current_query.database_name);
+            } else if (object == "TABLE") {
+                current_query.type = QueryType::DROP_TABLE;
+                if (!parseDropTable(tokens)) return false;
+                success &= db_manager.dropTable(current_query.table_name);
             }
-            return true;
-        }
-        case QueryType::INSERT: {
+        } else if (command == "USE") {
+            current_query.type = QueryType::USE_DATABASE;
+            if (!parseUseDatabase(tokens)) return false;
+            success &= db_manager.useDatabase(current_query.database_name);
+        } else if (command == "SHOW") {
+            if (tokens.size() < 2) return false;
+            std::string object = tokens[1];
+            std::transform(object.begin(), object.end(), object.begin(), ::toupper);
+            
+            if (object == "DATABASES") {
+                current_query.type = QueryType::SHOW_DATABASES;
+                auto databases = db_manager.listDatabases();
+                for (const auto& db : databases) {
+                    std::cout << db << std::endl;
+                }
+                success &= true;
+            } else if (object == "TABLES") {
+                current_query.type = QueryType::SHOW_TABLES;
+                auto tables = db_manager.listTables();
+                for (const auto& table : tables) {
+                    std::cout << table << std::endl;
+                }
+                success &= true;
+            }
+        } else if (command == "INSERT") {
+            current_query.type = QueryType::INSERT;
+            if (!parseInsert(tokens)) return false;
             Record record;
             for (const auto& [key, value] : current_query.values) {
                 record[key] = value;
             }
-            return db_manager.insertRecord(current_query.table_name, record);
-        }
-        case QueryType::SELECT: {
+            success &= db_manager.insertRecord(current_query.table_name, record);
+        } else if (command == "SELECT") {
+            current_query.type = QueryType::SELECT;
+            if (!parseSelect(tokens)) return false;
             std::vector<Record> results;
             if (current_query.conditions.empty()) {
                 results = db_manager.getAllRecords(current_query.table_name);
@@ -118,7 +191,7 @@ bool QueryParser::execute() {
                 
                 for (const auto& cond : current_query.conditions) {
                     conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
-                    operators.push_back("AND"); // Default to AND for now
+                    operators.push_back("AND");
                 }
                 
                 results = db_manager.searchRecordsWithFilter(
@@ -128,7 +201,6 @@ bool QueryParser::execute() {
                 );
             }
             
-            // Display results
             for (const auto& record : results) {
                 for (const auto& [key, value] : record) {
                     std::cout << key << ": ";
@@ -137,9 +209,10 @@ bool QueryParser::execute() {
                 }
                 std::cout << std::endl;
             }
-            return true;
-        }
-        case QueryType::UPDATE: {
+            success &= true;
+        } else if (command == "UPDATE") {
+            current_query.type = QueryType::UPDATE;
+            if (!parseUpdate(tokens)) return false;
             std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
             std::vector<std::string> operators;
             
@@ -148,14 +221,15 @@ bool QueryParser::execute() {
                 operators.push_back("AND");
             }
             
-            return db_manager.updateRecordsWithFilter(
+            success &= db_manager.updateRecordsWithFilter(
                 current_query.table_name,
                 current_query.values,
                 conditions,
                 operators
             );
-        }
-        case QueryType::DELETE_OP: {
+        } else if (command == "DELETE") {
+            current_query.type = QueryType::DELETE_OP;
+            if (!parseDelete(tokens)) return false;
             std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
             std::vector<std::string> operators;
             
@@ -164,15 +238,17 @@ bool QueryParser::execute() {
                 operators.push_back("AND");
             }
             
-            return db_manager.deleteRecordsWithFilter(
+            success &= db_manager.deleteRecordsWithFilter(
                 current_query.table_name,
                 conditions,
                 operators
             ) > 0;
         }
-        default:
-            return false;
     }
+    
+    // Restore the original query type
+    current_query.type = original_type;
+    return success;
 }
 
 // Helper method implementations
@@ -202,49 +278,93 @@ bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
     
     // Parse column definitions
     std::vector<std::tuple<std::string, std::string, int>> columns;
+    std::string primary_key;
+    std::map<std::string, std::pair<std::string, std::string>> foreign_keys;
+    
+    // Find the opening parenthesis
+    size_t i = 3;
+    while (i < tokens.size() && tokens[i] != "(") {
+        i++;
+    }
+    if (i >= tokens.size()) return false;
+    i++; // Skip the opening parenthesis
+    
     std::string current_col_name;
     std::string current_col_type;
     int current_col_length = 0;
-    bool in_parentheses = false;
-    bool reading_name = true;
+    bool is_primary_key = false;
     
-    for (size_t i = 3; i < tokens.size(); i++) {
+    while (i < tokens.size() && tokens[i] != ")") {
         std::string token = tokens[i];
+        std::transform(token.begin(), token.end(), token.begin(), ::toupper);
         
-        if (token == "(") {
-            in_parentheses = true;
-            continue;
-        }
-        if (token == ")") {
-            in_parentheses = false;
-            continue;
-        }
-        
-        if (in_parentheses) {
-            if (reading_name) {
-                current_col_name = token;
-                reading_name = false;
-            } else {
-                current_col_type = token;
-                if (current_col_type == "STRING" || current_col_type == "CHAR") {
-                    // Look for length specification
-                    if (i + 2 < tokens.size() && tokens[i+1] == "(" && tokens[i+2] != ")") {
-                        try {
-                            current_col_length = std::stoi(tokens[i+2]);
-                            i += 2; // Skip the length and closing parenthesis
-                        } catch (...) {
-                            return false;
-                        }
-                    }
-                }
+        if (token == ",") {
+            if (!current_col_name.empty() && !current_col_type.empty()) {
                 columns.push_back(std::make_tuple(current_col_name, current_col_type, current_col_length));
-                reading_name = true;
+                if (is_primary_key) {
+                    primary_key = current_col_name;
+                    is_primary_key = false;
+                }
+                current_col_name = "";
+                current_col_type = "";
                 current_col_length = 0;
             }
+            i++;
+            continue;
+        }
+        
+        if (token == "PRIMARY" && i + 1 < tokens.size() && tokens[i + 1] == "KEY") {
+            is_primary_key = true;
+            i += 2; // Skip PRIMARY KEY
+            continue;
+        }
+        
+        // If we don't have a column name yet, this is the column name
+        if (current_col_name.empty()) {
+            current_col_name = token;
+        }
+        // If we have a column name but no type, this is the type
+        else if (current_col_type.empty()) {
+            current_col_type = token;
+            if (current_col_type == "STRING" || current_col_type == "CHAR") {
+                if (i + 2 < tokens.size() && tokens[i + 1] == "(") {
+                    try {
+                        current_col_length = std::stoi(tokens[i + 2]);
+                        i += 3; // Skip the length and parentheses
+                    } catch (...) {
+                        return false;
+                    }
+                }
+            }
+        }
+        
+        i++;
+    }
+    
+    // Add the last column if there is one
+    if (!current_col_name.empty() && !current_col_type.empty()) {
+        columns.push_back(std::make_tuple(current_col_name, current_col_type, current_col_length));
+        if (is_primary_key) {
+            primary_key = current_col_name;
         }
     }
     
+    if (columns.empty()) {
+        return false; // Table must have at least one column
+    }
+    
     current_query.columns = columns;
+    current_query.primary_key = primary_key;
+    current_query.foreign_keys = foreign_keys;
+    
+    // Debug output
+    std::cout << "Primary key: " << primary_key << std::endl;
+    std::cout << "Columns: " << columns.size() << std::endl;
+    for (const auto& col : columns) {
+        std::cout << "Column: " << std::get<0>(col) << " " << std::get<1>(col) << " " << std::get<2>(col) << std::endl;
+    }
+    std::cout << "Foreign keys: " << foreign_keys.size() << std::endl;
+    
     return true;
 }
 
@@ -340,21 +460,40 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
     if (tokens.size() < 4) return false; // Minimum: SELECT * FROM table
     
     current_query.type = QueryType::SELECT;
-    current_query.table_name = tokens[3];
     
-    // Parse conditions if present
-    if (tokens.size() > 4 && tokens[4] == "WHERE") {
+    // Parse column list
+    size_t from_pos = std::find(tokens.begin(), tokens.end(), "FROM") - tokens.begin();
+    if (from_pos == tokens.size()) return false;
+    
+    current_query.table_name = tokens[from_pos + 1];
+    
+    // Parse WHERE conditions if present
+    size_t where_pos = std::find(tokens.begin(), tokens.end(), "WHERE") - tokens.begin();
+    if (where_pos < tokens.size()) {
         std::vector<Condition> conditions;
-        for (size_t i = 5; i < tokens.size(); i += 4) {
-            if (i + 2 >= tokens.size()) return false;
+        std::vector<std::string> operators;
+        
+        for (size_t i = where_pos + 1; i < tokens.size(); i++) {
+            if (i + 2 >= tokens.size()) break;
+            
+            std::string token = tokens[i];
+            std::transform(token.begin(), token.end(), token.begin(), ::toupper);
+            
+            if (token == "AND" || token == "OR" || token == "NOT") {
+                operators.push_back(token);
+                continue;
+            }
             
             Condition cond;
             cond.column = tokens[i];
             cond.op = tokens[i + 1];
             cond.value = parseValue(tokens[i + 2]);
             conditions.push_back(cond);
+            i += 2;
         }
+        
         current_query.conditions = conditions;
+        current_query.condition_operators = operators;
     }
     
     return true;
@@ -366,28 +505,48 @@ bool QueryParser::parseUpdate(const std::vector<std::string>& tokens) {
     current_query.type = QueryType::UPDATE;
     current_query.table_name = tokens[1];
     
-    // Parse SET clause
+    // Find SET keyword
+    size_t set_pos = std::find(tokens.begin(), tokens.end(), "SET") - tokens.begin();
+    if (set_pos == tokens.size()) return false;
+    
+    // Parse SET assignments
     std::map<std::string, FieldValue> values;
-    for (size_t i = 3; i < tokens.size(); i += 4) {
-        if (i + 2 >= tokens.size() || tokens[i + 1] != "=") return false;
+    for (size_t i = set_pos + 1; i < tokens.size(); i++) {
+        if (tokens[i] == "WHERE") break;
+        if (i + 2 >= tokens.size() || tokens[i + 1] != "=") continue;
         
         values[tokens[i]] = parseValue(tokens[i + 2]);
+        i += 2;
     }
     current_query.values = values;
     
-    // Parse WHERE clause if present
-    if (tokens.back() == "WHERE") {
+    // Parse WHERE conditions
+    size_t where_pos = std::find(tokens.begin(), tokens.end(), "WHERE") - tokens.begin();
+    if (where_pos < tokens.size()) {
         std::vector<Condition> conditions;
-        for (size_t i = tokens.size() - 3; i < tokens.size(); i += 4) {
-            if (i + 2 >= tokens.size()) return false;
+        std::vector<std::string> operators;
+        
+        for (size_t i = where_pos + 1; i < tokens.size(); i++) {
+            if (i + 2 >= tokens.size()) break;
+            
+            std::string token = tokens[i];
+            std::transform(token.begin(), token.end(), token.begin(), ::toupper);
+            
+            if (token == "AND" || token == "OR" || token == "NOT") {
+                operators.push_back(token);
+                continue;
+            }
             
             Condition cond;
             cond.column = tokens[i];
             cond.op = tokens[i + 1];
             cond.value = parseValue(tokens[i + 2]);
             conditions.push_back(cond);
+            i += 2;
         }
+        
         current_query.conditions = conditions;
+        current_query.condition_operators = operators;
     }
     
     return true;
@@ -399,19 +558,33 @@ bool QueryParser::parseDelete(const std::vector<std::string>& tokens) {
     current_query.type = QueryType::DELETE_OP;
     current_query.table_name = tokens[2];
     
-    // Parse WHERE clause if present
-    if (tokens.size() > 3 && tokens[3] == "WHERE") {
+    // Parse WHERE conditions
+    size_t where_pos = std::find(tokens.begin(), tokens.end(), "WHERE") - tokens.begin();
+    if (where_pos < tokens.size()) {
         std::vector<Condition> conditions;
-        for (size_t i = 4; i < tokens.size(); i += 4) {
-            if (i + 2 >= tokens.size()) return false;
+        std::vector<std::string> operators;
+        
+        for (size_t i = where_pos + 1; i < tokens.size(); i++) {
+            if (i + 2 >= tokens.size()) break;
+            
+            std::string token = tokens[i];
+            std::transform(token.begin(), token.end(), token.begin(), ::toupper);
+            
+            if (token == "AND" || token == "OR" || token == "NOT") {
+                operators.push_back(token);
+                continue;
+            }
             
             Condition cond;
             cond.column = tokens[i];
             cond.op = tokens[i + 1];
             cond.value = parseValue(tokens[i + 2]);
             conditions.push_back(cond);
+            i += 2;
         }
+        
         current_query.conditions = conditions;
+        current_query.condition_operators = operators;
     }
     
     return true;
@@ -422,7 +595,29 @@ std::vector<std::string> QueryParser::tokenize(const std::string& query) {
     std::string current_token;
     bool in_quotes = false;
     
-    for (char c : query) {
+    // Clean up the query string first
+    std::string cleaned_query = query;
+    // Replace all types of newlines and whitespace sequences with a single space
+    for (size_t i = 0; i < cleaned_query.length(); ) {
+        if (cleaned_query[i] == '\r' || cleaned_query[i] == '\n' || cleaned_query[i] == '\t') {
+            cleaned_query[i] = ' ';
+            i++;
+        } else if (cleaned_query[i] == ' ' && i + 1 < cleaned_query.length() && cleaned_query[i + 1] == ' ') {
+            cleaned_query.erase(i, 1);
+        } else {
+            i++;
+        }
+    }
+    
+    // Trim leading/trailing spaces
+    while (!cleaned_query.empty() && cleaned_query[0] == ' ') {
+        cleaned_query.erase(0, 1);
+    }
+    while (!cleaned_query.empty() && cleaned_query.back() == ' ') {
+        cleaned_query.pop_back();
+    }
+    
+    for (char c : cleaned_query) {
         if (c == '\'') {
             in_quotes = !in_quotes;
             current_token += c;

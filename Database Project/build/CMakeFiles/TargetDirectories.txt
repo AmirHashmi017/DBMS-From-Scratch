@@ -1,0 +1,3 @@
+D:/Github Repos/Database Project/Database Project/build/CMakeFiles/Database.dir
+D:/Github Repos/Database Project/Database Project/build/CMakeFiles/ALL_BUILD.dir
+D:/Github Repos/Database Project/Database Project/build/CMakeFiles/ZERO_CHECK.dir

@@ -1,3 +1,4 @@
+#include "SimpleHttpServer.h"
 #include "database_manager.h"
 #include "query_parser.h"
 #include <iostream>
@@ -1213,103 +1214,40 @@ int getNumericInput(const std::string& prompt) {
     }
 }
 
-int main() {
-    DatabaseManager db_manager;
-    QueryParser parser(db_manager);
-    
-    std::vector<std::string> menuOptions = {
-        "Create Table",
-        "Insert Record",
-        "Update Record",
-        "Delete Record",
-        "Display Records",
-        "Search Records",
-        "Create Database",
-        "Drop Database",
-        "Use Database",
-        "Drop Table",
-        "List Databases",
-        "Query Executor",
-        "Exit"
-    };
-
-    int currentSelection = 0;
-    bool running = true;
-
-    while (running) {
-        currentSelection = showMenu(menuOptions, currentSelection);
-
-        int key = _getch();
-        if (key == 224) { // Arrow key
-            key = _getch();
-            switch (key) {
-                case 72: // Up arrow
-                    currentSelection = (currentSelection - 1 + menuOptions.size()) % menuOptions.size();
-                    break;
-                case 80: // Down arrow
-                    currentSelection = (currentSelection + 1) % menuOptions.size();
-                    break;
+int main(int argc, char* argv[]) {
+    try {
+        // Initialize database manager
+        DatabaseManager dbManager("catalog.bin");
+        
+        // If command line argument is provided, execute it and exit
+        if (argc > 1) {
+            std::string query = argv[1];
+            QueryParser parser(dbManager);
+            if (parser.parse(query)) {
+                if (parser.execute()) {
+                    std::cout << "Query executed successfully.\n";
+                } else {
+                    std::cerr << "Error executing query.\n";
+                }
+            } else {
+                std::cerr << "Invalid query syntax.\n";
             }
-        } else if (key == 13) { // Enter key
-            clearScreen();
-            switch (currentSelection) {
-                case 0:
-                    createTableMenu(db_manager);
-                    break;
-                case 1:
-                    insertRecordMenu(db_manager);
-                    break;
-                case 2:
-                    updateRecordsWithFilterMenu(db_manager);
-                    break;
-                case 3:
-                    deleteRecordsWithFilterMenu(db_manager);
-                    break;
-                case 4:
-                    displayRecordsMenu(db_manager);
-                    break;
-                case 5:
-                    searchRecordsWithFilterMenu(db_manager);
-                    break;
-                case 6:
-                    createDatabaseMenu(db_manager);
-                    break;
-                case 7:
-                    dropDatabaseMenu(db_manager);
-                    break;
-                case 8:
-                    useDatabaseMenu(db_manager);
-                    break;
-                case 9:
-                    dropTableMenu(db_manager);
-                    break;
-                case 10:
-                    listDatabasesMenu(db_manager);
-                    break;
-                case 11:
-                    executeQuery(db_manager, parser);
-                    break;
-                case 12:
-                    running = false;
-                    std::cout << "Exiting program. Goodbye!\n";
-                    break;
-            }
-            if (running) {
-                std::cout << "\nPress any key to continue...";
-                _getch();
-            }
-        } else if (key >= '1' && key <= '9') {
-            int option = key - '1';
-            if (option < menuOptions.size()) {
-                currentSelection = option;
-            }
-        } else if (key == '0') {
-            int option = 9;
-            if (option < menuOptions.size()) {
-                currentSelection = option;
-            }
+            return 0;
         }
+        
+        // Otherwise start HTTP server
+        SimpleHttpServer server(dbManager, "127.0.0.1", 8080);
+        server.start();
+        
+        std::cout << "Press Enter to exit..." << std::endl;
+        std::cin.get();
+        
+        server.stop();
     }
-
+    catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+    
     return 0;
 }

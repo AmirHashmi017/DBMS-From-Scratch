@@ -38,10 +38,11 @@ struct Query {
     std::string database_name;
     std::string table_name;
     std::vector<std::tuple<std::string, std::string, int>> columns; // For CREATE TABLE
-    std::string primary_key;
-    std::map<std::string, std::pair<std::string, std::string>> foreign_keys;
+    std::string primary_key;  // Changed from vector to string
+    std::map<std::string, std::pair<std::string, std::string>> foreign_keys;  // Changed from vector to map
     std::vector<std::string> select_columns; // For SELECT
     std::vector<Condition> conditions; // For WHERE clauses
+    std::vector<std::string> condition_operators;  // Added for AND/OR/NOT operators
     std::map<std::string, std::variant<int, float, std::string, bool>> values; // For INSERT and UPDATE
 };
 
@@ -54,6 +55,7 @@ public:
 private:
     DatabaseManager& db_manager;
     Query current_query;
+    std::vector<std::string> commands;
 
     // Parsing helper methods
     bool parseCreateDatabase(const std::vector<std::string>& tokens);
