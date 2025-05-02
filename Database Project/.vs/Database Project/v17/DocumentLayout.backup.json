@@ -11,20 +11,20 @@
       "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:DatabaseManager.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database Project\\Database Project\\bptree.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:bptree.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database Project\\Database Project\\main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database Project\\Database Project\\database_manager.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:database_manager.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database Project\\Database Project\\query_parser.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:query_parser.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database Project\\Database Project\\main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database Project\\Database Project\\bptree.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|solutionrelative:bptree.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A35C56C4-A512-47DE-9517-7E6ECE37EE6A}|Database Project.vcxproj|D:\\Github Repos\\Database Project\\Database Project\\catalog.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
@@ -58,7 +58,7 @@
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
-      "VerticalTabListWidth": 256,
+      "VerticalTabListWidth": 163,
       "DocumentGroups": [
         {
           "DockedWidth": 200,
@@ -84,7 +84,7 @@
               "RelativeDocumentMoniker": "DatabaseManager.cpp",
               "ToolTip": "D:\\Github Repos\\Database Project\\Database Project\\DatabaseManager.cpp",
               "RelativeToolTip": "DatabaseManager.cpp",
-              "ViewState": "AgIAAK8EAAAAAAAAAAAAwMAEAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAABgDAAAAAAAAAAAjwC4DAAAJAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
               "WhenOpened": "2025-03-23T09:27:33.258Z",
               "EditorCaption": ""
@@ -127,7 +127,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 5,
               "Title": "bptree.cpp",
               "DocumentMoniker": "D:\\Github Repos\\Database Project\\Database Project\\bptree.cpp",
               "RelativeDocumentMoniker": "bptree.cpp",
@@ -135,12 +135,11 @@
               "RelativeToolTip": "bptree.cpp",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAAhAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-03-23T09:24:42.941Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-03-23T09:24:42.941Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 2,
               "Title": "database_manager.h",
               "DocumentMoniker": "D:\\Github Repos\\Database Project\\Database Project\\database_manager.h",
               "RelativeDocumentMoniker": "database_manager.h",
@@ -148,7 +147,8 @@
               "RelativeToolTip": "database_manager.h",
               "ViewState": "AgIAAGYAAAAAAAAAAAAowHcAAAAGAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-03-23T09:20:03.653Z"
+              "WhenOpened": "2025-03-23T09:20:03.653Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
@@ -158,26 +158,27 @@
               "RelativeDocumentMoniker": "query_parser.cpp",
               "ToolTip": "D:\\Github Repos\\Database Project\\Database Project\\query_parser.cpp",
               "RelativeToolTip": "query_parser.cpp",
-              "ViewState": "AgIAAHECAAAAAAAAAAAAwIcCAAAkAAAAAAAAAA==",
+              "ViewState": "AgIAAIwCAAAAAAAAAAAjwJYCAAAMAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
               "WhenOpened": "2025-04-23T08:10:18.281Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 3,
               "Title": "query_parser.h",
               "DocumentMoniker": "D:\\Github Repos\\Database Project\\Database Project\\query_parser.h",
               "RelativeDocumentMoniker": "query_parser.h",
               "ToolTip": "D:\\Github Repos\\Database Project\\Database Project\\query_parser.h",
               "RelativeToolTip": "query_parser.h",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABcAAAAOAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABcAAAANAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-04-23T08:10:25.139Z"
+              "WhenOpened": "2025-04-23T08:10:25.139Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 4,
               "Title": "main.cpp",
               "DocumentMoniker": "D:\\Github Repos\\Database Project\\Database Project\\main.cpp",
               "RelativeDocumentMoniker": "main.cpp",
@@ -185,7 +186,8 @@
               "RelativeToolTip": "main.cpp",
               "ViewState": "AgIAAFAEAAAAAAAAAAAAADkDAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-03-23T09:22:30.325Z"
+              "WhenOpened": "2025-03-23T09:22:30.325Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",

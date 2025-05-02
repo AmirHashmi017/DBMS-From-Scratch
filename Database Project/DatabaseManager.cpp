@@ -785,40 +785,57 @@ bool DatabaseManager::evaluateCondition(
         return true; // No conditions means all records match
     }
 
-    // Evaluate the first condition
-    bool result = evaluateSingleCondition(
-        record,
-        std::get<0>(conditions[0]),
-        std::get<1>(conditions[0]),
-        std::get<2>(conditions[0])
-    );
+    bool result = false;
+    size_t op_index = 0;
+    bool apply_not = false;
 
-    // Apply additional conditions with operators
-    for (size_t i = 1; i < conditions.size(); i++) {
-        bool next_result = evaluateSingleCondition(
+    for (size_t i = 0; i < conditions.size(); ++i) {
+        // Check for NOT operator
+        if (op_index < operators.size() && operators[op_index] == "NOT") {
+            apply_not = true;
+            std::cerr << "Applying operator: NOT" << std::endl;
+            op_index++;
+        }
+
+        // Evaluate the current condition
+        bool cond_result = evaluateSingleCondition(
             record,
             std::get<0>(conditions[i]),
             std::get<1>(conditions[i]),
             std::get<2>(conditions[i])
         );
 
-        // Apply the operator between the previous result and this condition
-        std::string op = operators[i - 1];
-        std::cerr << "Operator '" << op << "' not found" << std::endl;
-        if (op == "AND") {
-            result = result && next_result;
-            std::cerr << "AND";
+        // Apply NOT if specified
+        if (apply_not) {
+            cond_result = !cond_result;
+            apply_not = false;
         }
-        if (op == "OR") {
-            result = result || next_result;
-            std::cerr << "OR";
-        }
-        if (op == "NOT") {
-            result = result && !next_result;
-            std::cerr << "NOT";
+
+        std::cerr << "Evaluated condition " << i + 1 << ": " << (cond_result ? "true" : "false") << std::endl;
+
+        // Combine with previous result
+        if (i == 0) {
+            result = cond_result;
+        } else {
+            if (op_index >= operators.size()) {
+                std::cerr << "Error: Missing operator for condition " << i + 1 << std::endl;
+                return false;
+            }
+            const std::string& op = operators[op_index];
+            std::cerr << "Applying operator: " << op << std::endl;
+            if (op == "AND") {
+                result = result && cond_result;
+            } else if (op == "OR") {
+                result = result || cond_result;
+            } else {
+                std::cerr << "Error: Invalid operator '" << op << "'" << std::endl;
+                return false;
+            }
+            op_index++;
         }
     }
 
+    std::cerr << "Final condition result: " << (result ? "true" : "false") << std::endl;
     return result;
 }
 

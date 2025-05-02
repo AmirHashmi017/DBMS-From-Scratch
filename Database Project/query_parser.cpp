@@ -201,37 +201,59 @@ bool QueryParser::execute() {
             }
             success &= db_manager.insertRecord(current_query.table_name, record);
         } else if (command == "SELECT") {
-            current_query.type = QueryType::SELECT;
-            if (!parseSelect(tokens)) return false;
-            std::vector<Record> results;
-            if (current_query.conditions.empty()) {
-                results = db_manager.getAllRecords(current_query.table_name);
-            } else {
-                std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
-                std::vector<std::string> operators;
-                
-                for (const auto& cond : current_query.conditions) {
-                    conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
-                    operators.push_back(cond.op == "NOT" ? "NOT" : "AND");
-                }
-                
-                results = db_manager.searchRecordsWithFilter(
-                    current_query.table_name,
-                    conditions,
-                    operators
-                );
+    current_query.type = QueryType::SELECT;
+    if (!parseSelect(tokens)) return false;
+    std::vector<Record> results;
+    if (current_query.conditions.empty()) {
+        results = db_manager.getAllRecords(current_query.table_name);
+    } else {
+        std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
+        std::vector<std::string> operators;
+        
+        for (const auto& cond : current_query.conditions) {
+            conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
+        }
+        operators = current_query.condition_operators;
+        
+        results = db_manager.searchRecordsWithFilter(
+            current_query.table_name,
+            conditions,
+            operators
+        );
+    }
+    
+    // Get table schema to validate columns
+    TableSchema schema = db_manager.getTableSchema(current_query.table_name);
+    if (schema.name.empty()) {
+        std::cerr << "Error: Table '" << current_query.table_name << "' does not exist" << std::endl;
+        return false;
+    }
+    
+    // Prepare columns to display
+    std::vector<std::string> columns_to_display;
+    if (current_query.select_columns.size() == 1 && current_query.select_columns[0] == "*") {
+        for (const auto& col : schema.columns) {
+            columns_to_display.push_back(col.name);
+        }
+    } else {
+        columns_to_display = current_query.select_columns;
+    }
+    
+    // Print only the selected columns
+    for (const auto& record : results) {
+        bool first = true;
+        for (const auto& col : columns_to_display) {
+            if (record.find(col) != record.end()) {
+                if (!first) std::cout << ", ";
+                std::cout << col << ": ";
+                std::visit([](auto&& arg) { std::cout << arg; }, record.at(col));
+                first = false;
             }
-            
-            for (const auto& record : results) {
-                for (const auto& [key, value] : record) {
-                    std::cout << key << ": ";
-                    std::visit([](auto&& arg) { std::cout << arg; }, value);
-                    std::cout << " ";
-                }
-                std::cout << std::endl;
-            }
-            success &= true;
-        } else if (command == "UPDATE") {
+        }
+        std::cout << std::endl;
+    }
+    success &= true;
+} else if (command == "UPDATE") {
             current_query.type = QueryType::UPDATE;
             if (!parseUpdate(tokens)) return false;
             std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
@@ -643,43 +665,102 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
     
     current_query.type = QueryType::SELECT;
     
-    // Parse column list  
+    // Parse column list
     size_t from_pos = std::find(tokens.begin(), tokens.end(), "FROM") - tokens.begin();
     if (from_pos == tokens.size()) {
         std::cerr << "Error: Missing FROM clause" << std::endl;
         return false;
     }
     
+    // Parse columns (between SELECT and FROM)
+    std::vector<std::string> columns;
+    for (size_t i = 1; i < from_pos; i++) {
+        std::string col = tokens[i];
+        col.erase(std::remove(col.begin(), col.end(), ','), col.end());
+        if (!col.empty()) {
+            columns.push_back(col);
+        }
+    }
+    if (columns.empty()) {
+        columns.push_back("*");
+    }
+    
+    // Validate columns against table schema
     current_query.table_name = tokens[from_pos + 1];
+    TableSchema schema = db_manager.getTableSchema(current_query.table_name);
+    if (schema.name.empty()) {
+        std::cerr << "Error: Table '" << current_query.table_name << "' does not exist" << std::endl;
+        return false;
+    }
+    
+    if (columns[0] != "*") {
+        for (const auto& col : columns) {
+            bool found = false;
+            for (const auto& schema_col : schema.columns) {
+                if (schema_col.name == col) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                std::cerr << "Error: Column '" << col << "' does not exist in table '" << current_query.table_name << "'" << std::endl;
+                return false;
+            }
+        }
+    }
+    
+    current_query.select_columns = columns;
     
     // Parse WHERE conditions if present
     size_t where_pos = std::find(tokens.begin(), tokens.end(), "WHERE") - tokens.begin();
     if (where_pos < tokens.size()) {
-        std::vector<Condition> conditions;
-        std::vector<std::string> operators;
+        current_query.conditions.clear();
+        current_query.condition_operators.clear();
         
-        for (size_t i = where_pos + 1; i < tokens.size(); i++) {
-            if (i + 2 >= tokens.size()) break;
-            
+        for (size_t i = where_pos + 1; i < tokens.size(); ) {
             std::string token = tokens[i];
             std::transform(token.begin(), token.end(), token.begin(), ::toupper);
             
             if (token == "AND" || token == "OR" || token == "NOT") {
-                std::cerr << token;
-                operators.push_back(token);
+                current_query.condition_operators.push_back(token);
+                std::cerr << "Parsed operator: " << token << std::endl;
+                i++;
                 continue;
             }
-            std::cerr << tokens[i+1];
+            
+            if (i + 2 >= tokens.size()) {
+                std::cerr << "Error: Incomplete WHERE condition" << std::endl;
+                return false;
+            }
+            
             Condition cond;
             cond.column = tokens[i];
             cond.op = tokens[i + 1];
             cond.value = parseValue(tokens[i + 2]);
-            conditions.push_back(cond);
-            i += 2;
+            current_query.conditions.push_back(cond);
+            std::cerr << "Parsed condition: " << cond.column << " " << cond.op << " ";
+            std::visit([](auto&& arg) { std::cerr << arg; }, cond.value);
+            std::cerr << std::endl;
+            i += 3;
         }
         
-        current_query.conditions = conditions;
-        current_query.condition_operators = operators;
+        // Debug: Print all operators
+        std::cerr << "All condition operators: ";
+        for (const auto& op : current_query.condition_operators) {
+            std::cerr << "'" << op << "' ";
+        }
+        std::cerr << std::endl;
+        
+        // Validate operator count
+        size_t expected_ops = current_query.conditions.size() - 1;
+        size_t not_count = std::count(current_query.condition_operators.begin(), 
+                                     current_query.condition_operators.end(), "NOT");
+        if (current_query.condition_operators.size() < expected_ops || 
+            current_query.condition_operators.size() > expected_ops + not_count) {
+            std::cerr << "Error: Mismatched operators (" << current_query.condition_operators.size() 
+                      << ") for conditions (" << current_query.conditions.size() << ")" << std::endl;
+            return false;
+        }
     }
     
     return true;
