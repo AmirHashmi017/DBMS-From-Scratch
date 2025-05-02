@@ -73,14 +73,27 @@ void SimpleHttpServer::handleRequest(http::request<http::string_body>&& req, tcp
                 if (parser.parse(query)) {
                     if (parser.execute()) {
                         response["success"] = true;
-                        response["data"] = "Query executed successfully";
+                        // Convert Record objects to JSON
+                        json results_array = json::array();
+                        for (const auto& record : parser.current_query.results) {
+                            json record_obj;
+                            for (const auto& [key, value] : record) {
+                                std::visit([&](const auto& val) {
+                                    record_obj[key] = val;
+                                }, value);
+                            }
+                            results_array.push_back(record_obj);
+                        }
+                        response["results"] = results_array;
+                        response["error_message"] = parser.current_query.error_message;
+                        response["records_found"] = parser.current_query.records_found;
                     } else {
                         response["success"] = false;
-                        response["error"] = "Error executing query";
+                        response["error_message"] = parser.current_query.error_message;
                     }
                 } else {
                     response["success"] = false;
-                    response["error"] = "Invalid query syntax";
+                    response["error_message"] = "Invalid query syntax";
                 }
                 res.body() = response.dump();
             }
@@ -95,7 +108,7 @@ void SimpleHttpServer::handleRequest(http::request<http::string_body>&& req, tcp
                     response["message"] = "Database switched successfully";
                 } else {
                     response["success"] = false;
-                    response["error"] = "Failed to switch database";
+                    response["error_message"] = "Failed to switch database";
                 }
                 res.body() = response.dump();
             }
@@ -105,14 +118,16 @@ void SimpleHttpServer::handleRequest(http::request<http::string_body>&& req, tcp
                 auto databases = dbManager.listDatabases();
                 json response;
                 response["success"] = true;
-                response["data"] = databases;
+                response["results"] = databases;
+                response["records_found"] = databases.size();
                 res.body() = response.dump();
             }
             else if (req.target() == "/tables") {
                 auto tables = dbManager.listTables();
                 json response;
                 response["success"] = true;
-                response["data"] = tables;
+                response["results"] = tables;
+                response["records_found"] = tables.size();
                 res.body() = response.dump();
             }
         }
@@ -121,10 +136,10 @@ void SimpleHttpServer::handleRequest(http::request<http::string_body>&& req, tcp
         res.result(http::status::internal_server_error);
         json error;
         error["success"] = false;
-        error["error"] = e.what();
+        error["error_message"] = e.what();
         res.body() = error.dump();
     }
 
     res.prepare_payload();
     http::write(socket, res);
-} 
+}

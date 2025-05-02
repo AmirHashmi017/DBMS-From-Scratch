@@ -18,15 +18,7 @@ function App() {
 
   useEffect(() => {
     // Load database structure on initial render
-    const loadStructure = async () => {
-      try {
-        const data = await fetchDatabaseStructure();
-        setStructure(data);
-      } catch (err) {
-        setError('Failed to load database structure');
-      }
-    };
-    loadStructure();
+    
   }, []);
 
   const handleRunQuery = async () => {
@@ -40,11 +32,17 @@ function App() {
       const response = await executeQuery(query);
       const endTime = performance.now();
       
-      setResults(response.data.results);
-      setRecordsFound(response.data.recordsFound || 0);
+      if (response.data.success) {
+        setResults(response.data.data.results);
+        setRecordsFound(response.data.data.recordsFound);
+        setError(response.data.data.error);
+      } else {
+        setError(response.data.error || 'Query execution failed');
+        setResults(null);
+      }
       setExecutionTime((endTime - startTime).toFixed(2));
     } catch (err) {
-      setError(err.response?.data?.error || 'Query execution failed');
+      setError(err.userMessage || 'Query execution failed');
       setResults(null);
     } finally {
       setLoading(false);

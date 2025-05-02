@@ -133,14 +133,31 @@ app.post('/api/query', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Query is required' });
     }
     
-    const result = await communicateWithBackend(query);
-    res.json({ success: true, data: result });
+    const response = await axios.post('http://localhost:8080/query', {
+      query: query
+    }, {
+      timeout: 5000,
+      maxRedirects: 0
+    });
+
+    // Forward the structured response from the backend
+    res.json({
+      success: true,
+      data: {
+        results: response.data.results || [],
+        error: response.data.error_message || null,
+        recordsFound: response.data.records_found || 0
+      }
+    });
   } catch (error) {
     logger.error('Query execution failed', { 
       error: error.message,
       query: req.body.query
     });
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      error: error.response?.data?.error_message || error.message 
+    });
   }
 });
 

@@ -34,6 +34,7 @@ struct Query {
     QueryType type;
     std::string database_name;
     std::string table_name;
+    std::string join_table_name;
     std::vector<std::tuple<std::string, std::string, int>> columns; // name, type, length
     std::string primary_key;
     std::map<std::string, std::pair<std::string, std::string>> foreign_keys; // col -> (ref_table, ref_col)
@@ -42,12 +43,16 @@ struct Query {
     std::vector<std::string> condition_operators;
     std::vector<std::string> select_columns; // Added for SELECT column selection
     // Join-related fields
-    std::string join_table_name;
     Condition join_condition;
+    // New fields for structured response
+    std::vector<Record> results;
+    std::string error_message;
+    int records_found;
 };
 
 class QueryParser {
 public:
+    Query current_query;
     QueryParser(DatabaseManager& db_manager);
     bool parse(const std::string& query_string);
     bool execute();
@@ -55,7 +60,7 @@ public:
 private:
     DatabaseManager& db_manager;
     std::vector<std::string> commands;
-    Query current_query;
+    
 
     // Parsing methods
     bool parseCreateDatabase(const std::vector<std::string>& tokens);

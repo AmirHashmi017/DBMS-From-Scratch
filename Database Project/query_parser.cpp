@@ -58,6 +58,7 @@ bool QueryParser::parse(const std::string& query_string) {
     
     // Process each command
     bool all_success = true;
+    current_query.error_message.clear(); // Clear at start of parse
     for (const auto& cmd : commands) {
         std::vector<std::string> tokens = tokenize(cmd);
         if (tokens.empty()) continue;
@@ -67,7 +68,10 @@ bool QueryParser::parse(const std::string& query_string) {
         std::transform(command.begin(), command.end(), command.begin(), ::toupper);
 
         if (command == "CREATE") {
-            if (tokens.size() < 2) return false;
+            if (tokens.size() < 2) {
+                current_query.error_message = "Invalid CREATE syntax: missing object type";
+                return false;
+            }
             std::string object = tokens[1];
             std::transform(object.begin(), object.end(), object.begin(), ::toupper);
             
@@ -77,9 +81,15 @@ bool QueryParser::parse(const std::string& query_string) {
             } else if (object == "TABLE") {
                 current_query.type = QueryType::CREATE_TABLE;
                 all_success &= parseCreateTable(tokens);
+            } else {
+                current_query.error_message = "Invalid CREATE syntax: unknown object '" + object + "'";
+                return false;
             }
         } else if (command == "DROP") {
-            if (tokens.size() < 2) return false;
+            if (tokens.size() < 2) {
+                current_query.error_message = "Invalid DROP syntax: missing object type";
+                return false;
+            }
             std::string object = tokens[1];
             std::transform(object.begin(), object.end(), object.begin(), ::toupper);
             
@@ -89,12 +99,18 @@ bool QueryParser::parse(const std::string& query_string) {
             } else if (object == "TABLE") {
                 current_query.type = QueryType::DROP_TABLE;
                 all_success &= parseDropTable(tokens);
+            } else {
+                current_query.error_message = "Invalid DROP syntax: unknown object '" + object + "'";
+                return false;
             }
         } else if (command == "USE") {
             current_query.type = QueryType::USE_DATABASE;
             all_success &= parseUseDatabase(tokens);
         } else if (command == "SHOW") {
-            if (tokens.size() < 2) return false;
+            if (tokens.size() < 2) {
+                current_query.error_message = "Invalid SHOW syntax: missing object type";
+                return false;
+            }
             std::string object = tokens[1];
             std::transform(object.begin(), object.end(), object.begin(), ::toupper);
             
@@ -104,6 +120,9 @@ bool QueryParser::parse(const std::string& query_string) {
             } else if (object == "TABLES") {
                 current_query.type = QueryType::SHOW_TABLES;
                 all_success &= true;
+            } else {
+                current_query.error_message = "Invalid SHOW syntax: unknown object '" + object + "'";
+                return false;
             }
         } else if (command == "INSERT") {
             current_query.type = QueryType::INSERT;
@@ -117,6 +136,9 @@ bool QueryParser::parse(const std::string& query_string) {
         } else if (command == "DELETE") {
             current_query.type = QueryType::DELETE_OP;
             all_success &= parseDelete(tokens);
+        } else {
+            current_query.error_message = "Unknown command: '" + command + "'";
+            return false;
         }
     }
     
@@ -125,6 +147,8 @@ bool QueryParser::parse(const std::string& query_string) {
 
 bool QueryParser::execute() {
     bool success = true;
+    std::vector<Record> results;
+    int records_found = 0;
 
     for (const auto& cmd : commands) {
         std::vector<std::string> tokens = tokenize(cmd);
@@ -134,46 +158,88 @@ bool QueryParser::execute() {
         std::string command = tokens[0];
         std::transform(command.begin(), command.end(), command.begin(), ::toupper);
 
+        // Clear results for this command, but preserve error_message if already set
+        results.clear();
+        records_found = 0;
+
         if (command == "CREATE") {
-            if (tokens.size() < 2) return false;
+            if (tokens.size() < 2) {
+                current_query.error_message = "Invalid CREATE command syntax";
+                return false;
+            }
             std::string object = tokens[1];
             std::transform(object.begin(), object.end(), object.begin(), ::toupper);
             
             if (object == "DATABASE") {
                 current_query.type = QueryType::CREATE_DATABASE;
-                if (!parseCreateDatabase(tokens)) return false;
+                if (!parseCreateDatabase(tokens)) {
+                    current_query.error_message = "Failed to parse CREATE DATABASE command";
+                    return false;
+                }
                 success &= db_manager.createDatabase(current_query.database_name);
+                if (!success) {
+                    current_query.error_message = "Failed to create database '" + current_query.database_name + "'";
+                }
             } else if (object == "TABLE") {
                 current_query.type = QueryType::CREATE_TABLE;
-                if (!parseCreateTable(tokens)) return false;
-                std::cout << "Executing createTable with primary_key: '" << current_query.primary_key << "'" << std::endl;
+                if (!parseCreateTable(tokens)) {
+                    current_query.error_message = "Failed to parse CREATE TABLE command";
+                    return false;
+                }
                 success &= db_manager.createTable(
                     current_query.table_name,
                     current_query.columns,
                     current_query.primary_key,
                     current_query.foreign_keys
                 );
+                if (!success) {
+                    current_query.error_message = "Failed to create table '" + current_query.table_name + "'";
+                }
             }
         } else if (command == "DROP") {
-            if (tokens.size() < 2) return false;
+            if (tokens.size() < 2) {
+                current_query.error_message = "Invalid DROP command syntax";
+                return false;
+            }
             std::string object = tokens[1];
             std::transform(object.begin(), object.end(), object.begin(), ::toupper);
             
             if (object == "DATABASE") {
                 current_query.type = QueryType::DROP_DATABASE;
-                if (!parseDropDatabase(tokens)) return false;
+                if (!parseDropDatabase(tokens)) {
+                    current_query.error_message = "Failed to parse DROP DATABASE command";
+                    return false;
+                }
                 success &= db_manager.dropDatabase(current_query.database_name);
+                if (!success) {
+                    current_query.error_message = "Failed to drop database '" + current_query.database_name + "'";
+                }
             } else if (object == "TABLE") {
                 current_query.type = QueryType::DROP_TABLE;
-                if (!parseDropTable(tokens)) return false;
+                if (!parseDropTable(tokens)) {
+                    current_query.error_message = "Failed to parse DROP TABLE command";
+                    return false;
+                }
                 success &= db_manager.dropTable(current_query.table_name);
+                if (!success) {
+                    current_query.error_message = "Failed to drop table '" + current_query.table_name + "'";
+                }
             }
         } else if (command == "USE") {
             current_query.type = QueryType::USE_DATABASE;
-            if (!parseUseDatabase(tokens)) return false;
+            if (!parseUseDatabase(tokens)) {
+                current_query.error_message = "Failed to parse USE DATABASE command";
+                return false;
+            }
             success &= db_manager.useDatabase(current_query.database_name);
+            if (!success) {
+                current_query.error_message = "Failed to use database '" + current_query.database_name + "'";
+            }
         } else if (command == "SHOW") {
-            if (tokens.size() < 2) return false;
+            if (tokens.size() < 2) {
+                current_query.error_message = "Invalid SHOW command syntax";
+                return false;
+            }
             std::string object = tokens[1];
             std::transform(object.begin(), object.end(), object.begin(), ::toupper);
             
@@ -181,128 +247,128 @@ bool QueryParser::execute() {
                 current_query.type = QueryType::SHOW_DATABASES;
                 auto databases = db_manager.listDatabases();
                 for (const auto& db : databases) {
-                    std::cout << db << std::endl;
+                    Record record;
+                    record["database"] = db;
+                    results.push_back(record);
                 }
-                success &= true;
+                records_found = databases.size();
             } else if (object == "TABLES") {
                 current_query.type = QueryType::SHOW_TABLES;
                 auto tables = db_manager.listTables();
                 for (const auto& table : tables) {
-                    std::cout << table << std::endl;
+                    Record record;
+                    record["table"] = table;
+                    results.push_back(record);
                 }
-                success &= true;
+                records_found = tables.size();
             }
         } else if (command == "INSERT") {
             current_query.type = QueryType::INSERT;
-            if (!parseInsert(tokens)) return false;
+            if (!parseInsert(tokens)) {
+                current_query.error_message = "Failed to parse INSERT command";
+                return false;
+            }
             Record record;
             for (const auto& [key, value] : current_query.values) {
                 record[key] = value;
             }
             success &= db_manager.insertRecord(current_query.table_name, record);
+            if (!success) {
+                current_query.error_message = "Failed to insert record into table '" + current_query.table_name + "'";
+            }
         } else if (command == "SELECT") {
-    current_query.type = QueryType::SELECT;
-    std::vector<Record> results;
-    if (!current_query.join_table_name.empty()) {
-        // Handle JOIN query
-        std::vector<std::tuple<std::string, std::string, FieldValue>> join_conditions;
-        for (const auto& cond : current_query.conditions) {
-            join_conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
-        }
-        results = db_manager.joinTables(
-            current_query.table_name,
-            current_query.join_table_name,
-            current_query.join_condition,
-            join_conditions,
-            current_query.condition_operators
-        );
-    } else if (current_query.conditions.empty()) {
-        results = db_manager.getAllRecords(current_query.table_name);
-    } else {
-        std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
-        for (const auto& cond : current_query.conditions) {
-            conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
-        }
-        results = db_manager.searchRecordsWithFilter(
-            current_query.table_name,
-            conditions,
-            current_query.condition_operators
-        );
-    }
-    TableSchema schema1 = db_manager.getTableSchema(current_query.table_name);
-    if (schema1.name.empty()) {
-        std::cerr << "Error: Table '" << current_query.table_name << "' does not exist" << std::endl;
-        return false;
-    }
-    TableSchema schema2;
-    if (!current_query.join_table_name.empty()) {
-        schema2 = db_manager.getTableSchema(current_query.join_table_name);
-        if (schema2.name.empty()) {
-            std::cerr << "Error: Join table '" << current_query.join_table_name << "' does not exist" << std::endl;
-            return false;
-        }
-    }
-    std::vector<std::string> columns_to_display;
-    if (current_query.select_columns.size() == 1 && current_query.select_columns[0] == "*") {
-        if (!current_query.join_table_name.empty()) {
-            for (const auto& col : schema1.columns) {
-                columns_to_display.push_back(current_query.table_name + "." + col.name);
+            current_query.type = QueryType::SELECT;
+            TableSchema schema1 = db_manager.getTableSchema(current_query.table_name);
+            if (schema1.name.empty()) {
+                current_query.error_message = "Table '" + current_query.table_name + "' does not exist";
+                return false;
             }
-            for (const auto& col : schema2.columns) {
-                columns_to_display.push_back(current_query.join_table_name + "." + col.name);
+            if (!current_query.join_table_name.empty()) {
+                TableSchema schema2 = db_manager.getTableSchema(current_query.join_table_name);
+                if (schema2.name.empty()) {
+                    current_query.error_message = "Join table '" + current_query.join_table_name + "' does not exist";
+                    return false;
+                }
+                // Handle JOIN query
+                std::vector<std::tuple<std::string, std::string, FieldValue>> join_conditions;
+                for (const auto& cond : current_query.conditions) {
+                    join_conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
+                }
+                results = db_manager.joinTables(
+                    current_query.table_name,
+                    current_query.join_table_name,
+                    current_query.join_condition,
+                    join_conditions,
+                    current_query.condition_operators
+                );
+                if (results.empty() && !join_conditions.empty()) {
+                    current_query.error_message = "No records match the JOIN conditions";
+                }
+            } else if (current_query.conditions.empty()) {
+                results = db_manager.getAllRecords(current_query.table_name);
+                if (results.empty()) {
+                    current_query.error_message = "No records found in table '" + current_query.table_name + "'";
+                }
+            } else {
+                std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
+                for (const auto& cond : current_query.conditions) {
+                    conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
+                }
+                results = db_manager.searchRecordsWithFilter(
+                    current_query.table_name,
+                    conditions,
+                    current_query.condition_operators
+                );
+                if (results.empty()) {
+                    current_query.error_message = "No records match the WHERE conditions in table '" + current_query.table_name + "'";
+                }
             }
-        } else {
-            for (const auto& col : schema1.columns) {
-                columns_to_display.push_back(col.name); // Use unqualified column names for non-join
-            }
-        }
-    } else {
-        columns_to_display = current_query.select_columns;
-    }
-    for (const auto& record : results) {
-        bool first = true;
-        for (const auto& col : columns_to_display) {
-            if (record.find(col) != record.end()) {
-                if (!first) std::cout << ", ";
-                std::cout << col << ": ";
-                std::visit([](auto&& arg) { std::cout << arg; }, record.at(col));
-                first = false;
-            }
-        }
-        std::cout << std::endl;
-    }
-    success = true;
-} else if (command == "UPDATE") {
+            records_found = results.size();
+        } else if (command == "UPDATE") {
             current_query.type = QueryType::UPDATE;
-            if (!parseUpdate(tokens)) return false;
+            if (!parseUpdate(tokens)) {
+                current_query.error_message = "Failed to parse UPDATE command";
+                return false;
+            }
             std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
-            
             for (const auto& cond : current_query.conditions) {
                 conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
             }
-            
             success &= db_manager.updateRecordsWithFilter(
                 current_query.table_name,
                 current_query.values,
                 conditions,
-                current_query.condition_operators // Use parsed operators
+                current_query.condition_operators
             );
+            if (!success) {
+                current_query.error_message = "Failed to update records in table '" + current_query.table_name + "'";
+            }
         } else if (command == "DELETE") {
             current_query.type = QueryType::DELETE_OP;
-            if (!parseDelete(tokens)) return false;
+            if (!parseDelete(tokens)) {
+                current_query.error_message = "Failed to parse DELETE command";
+                return false;
+            }
             std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
-            
             for (const auto& cond : current_query.conditions) {
                 conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
             }
-            
-            success &= db_manager.deleteRecordsWithFilter(
+            int deleted = db_manager.deleteRecordsWithFilter(
                 current_query.table_name,
                 conditions,
-                current_query.condition_operators // Use parsed operators
-            ) >= 0;
+                current_query.condition_operators
+            );
+            success &= (deleted >= 0);
+            records_found = deleted;
+            if (!success) {
+                current_query.error_message = "Failed to delete records from table '" + current_query.table_name + "'";
+            }
         }
     }
+
+    // Store the results and records found
+    current_query.results = results;
+    current_query.records_found = records_found;
     
     return success;
 }
@@ -310,7 +376,7 @@ bool QueryParser::execute() {
 // Parsing methods
 bool QueryParser::parseCreateDatabase(const std::vector<std::string>& tokens) {
     if (tokens.size() != 3) {
-        std::cerr << "Error: Invalid CREATE DATABASE syntax" << std::endl;
+        current_query.error_message = "Invalid CREATE DATABASE syntax: expected 'CREATE DATABASE name'";
         return false;
     }
     current_query.database_name = tokens[2];
@@ -319,7 +385,7 @@ bool QueryParser::parseCreateDatabase(const std::vector<std::string>& tokens) {
 
 bool QueryParser::parseDropDatabase(const std::vector<std::string>& tokens) {
     if (tokens.size() != 3) {
-        std::cerr << "Error: Invalid DROP DATABASE syntax" << std::endl;
+        current_query.error_message = "Invalid DROP DATABASE syntax: expected 'DROP DATABASE name'";
         return false;
     }
     current_query.database_name = tokens[2];
@@ -328,7 +394,7 @@ bool QueryParser::parseDropDatabase(const std::vector<std::string>& tokens) {
 
 bool QueryParser::parseUseDatabase(const std::vector<std::string>& tokens) {
     if (tokens.size() != 2) {
-        std::cerr << "Error: Invalid USE DATABASE syntax" << std::endl;
+        current_query.error_message = "Invalid USE DATABASE syntax: expected 'USE name'";
         return false;
     }
     current_query.database_name = tokens[1];
@@ -337,7 +403,7 @@ bool QueryParser::parseUseDatabase(const std::vector<std::string>& tokens) {
 
 bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
     if (tokens.size() < 4) {
-        std::cerr << "Error: Invalid CREATE TABLE syntax" << std::endl;
+        current_query.error_message = "Invalid CREATE TABLE syntax: expected 'CREATE TABLE name (...)'";
         return false;
     }
     
@@ -355,7 +421,7 @@ bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
         i++;
     }
     if (i >= tokens.size()) {
-        std::cerr << "Error: Expected '(' after table name" << std::endl;
+        current_query.error_message = "Expected '(' after table name";
         return false;
     }
     i++; // Skip the opening parenthesis
@@ -364,13 +430,6 @@ bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
     std::string current_col_type;
     int current_col_length = 0; // Default to 0 (no length specified)
     bool is_primary_key = false;
-    
-    // Debug: Print tokens for inspection
-    std::cout << "Tokens for CREATE TABLE: ";
-    for (const auto& token : tokens) {
-        std::cout << "'" << token << "' ";
-    }
-    std::cout << std::endl;
     
     while (i < tokens.size() && tokens[i] != ")") {
         std::string token = tokens[i];
@@ -386,11 +445,10 @@ bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
         if (token_upper == "PRIMARY" && i + 3 < tokens.size() && 
             tokens[i + 1] == "KEY" && tokens[i + 2] == "(") {
             if (tokens[i + 3] == ")") {
-                std::cerr << "Error: PRIMARY KEY column name missing" << std::endl;
+                current_query.error_message = "PRIMARY KEY column name missing";
                 return false;
             }
             primary_key = tokens[i + 3];
-            std::cout << "Found PRIMARY KEY: " << primary_key << std::endl;
             i += 5; // Skip PRIMARY KEY (column_name)
             if (i < tokens.size() && tokens[i] == ",") {
                 i++; // Skip comma if present
@@ -437,7 +495,7 @@ bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
                     current_col_length = std::stoi(tokens[i + 2]);
                     i += 4; // Skip type ( length )
                 } catch (...) {
-                    std::cerr << "Error: Invalid length for " << current_col_type << std::endl;
+                    current_query.error_message = "Invalid length for " + current_col_type;
                     return false;
                 }
             } else {
@@ -461,8 +519,6 @@ bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
                         primary_key = current_col_name;
                         is_primary_key = false;
                     }
-                    std::cout << "Added column: " << current_col_name << " " << current_col_type 
-                              << (current_col_length > 0 ? "(" + std::to_string(current_col_length) + ")" : "") << std::endl;
                     current_col_name.clear();
                     current_col_type.clear();
                     current_col_length = 0;
@@ -483,12 +539,10 @@ bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
         if (is_primary_key) {
             primary_key = current_col_name;
         }
-        std::cout << "Added final column: " << current_col_name << " " << current_col_type 
-                  << (current_col_length > 0 ? "(" + std::to_string(current_col_length) + ")" : "") << std::endl;
     }
     
     if (columns.empty()) {
-        std::cerr << "Error: No columns defined for table" << std::endl;
+        current_query.error_message = "No columns defined for table";
         return false;
     }
     
@@ -501,7 +555,7 @@ bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
         }
     }
     if (!primary_key.empty() && !pk_found) {
-        std::cerr << "Error: Primary key column '" << primary_key << "' not found in column definitions" << std::endl;
+        current_query.error_message = "Primary key column '" + primary_key + "' not found in column definitions";
         return false;
     }
     
@@ -509,26 +563,12 @@ bool QueryParser::parseCreateTable(const std::vector<std::string>& tokens) {
     current_query.primary_key = primary_key;
     current_query.foreign_keys = foreign_keys;
     
-    // Debug output
-    std::cout << "Parsed CREATE TABLE command:" << std::endl;
-    std::cout << "Table name: " << current_query.table_name << std::endl;
-    std::cout << "Primary key: " << primary_key << std::endl;
-    std::cout << "Columns:" << std::endl;
-    for (const auto& col : columns) {
-        std::cout << "  " << std::get<0>(col) << " " << std::get<1>(col);
-        if (std::get<2>(col) > 0) {
-            std::cout << "(" << std::get<2>(col) << ")";
-        }
-        std::cout << std::endl;
-    }
-    std::cout << "Foreign keys: " << foreign_keys.size() << std::endl;
-    
     return true;
 }
 
 bool QueryParser::parseDropTable(const std::vector<std::string>& tokens) {
     if (tokens.size() != 3) {
-        std::cerr << "Error: Invalid DROP TABLE syntax" << std::endl;
+        current_query.error_message = "Invalid DROP TABLE syntax: expected 'DROP TABLE name'";
         return false;
     }
     current_query.table_name = tokens[2];
@@ -537,7 +577,7 @@ bool QueryParser::parseDropTable(const std::vector<std::string>& tokens) {
 
 bool QueryParser::parseInsert(const std::vector<std::string>& tokens) {
     if (tokens.size() < 6) {
-        std::cerr << "Error: Invalid INSERT syntax" << std::endl;
+        current_query.error_message = "Invalid INSERT syntax: expected 'INSERT INTO table VALUES (...)'";
         return false;
     }
 
@@ -551,14 +591,14 @@ bool QueryParser::parseInsert(const std::vector<std::string>& tokens) {
     // Get table schema to map values to column names
     TableSchema schema = db_manager.getTableSchema(current_query.table_name);
     if (schema.name.empty()) {
-        std::cerr << "Error: Table '" << current_query.table_name << "' does not exist" << std::endl;
+        current_query.error_message = "Table '" + current_query.table_name + "' does not exist";
         return false;
     }
 
     // Start parsing after VALUES keyword
     size_t i = 4; // Should point to '(' after VALUES
     if (tokens[i] != "(") {
-        std::cerr << "Error: Expected '(' after VALUES" << std::endl;
+        current_query.error_message = "Expected '(' after VALUES";
         return false;
     }
     i++; // Skip '('
@@ -606,21 +646,14 @@ bool QueryParser::parseInsert(const std::vector<std::string>& tokens) {
     }
 
     if (i >= tokens.size() || tokens[i] != ")") {
-        std::cerr << "Error: Expected ')' after values" << std::endl;
+        current_query.error_message = "Expected ')' after values";
         return false;
     }
-
-    // Debug: Print value tokens
-    std::cout << "Value tokens: ";
-    for (const auto& vt : value_tokens) {
-        std::cout << "'" << vt << "' ";
-    }
-    std::cout << std::endl;
 
     // Parse each value token
     for (const auto& token : value_tokens) {
         if (value_index >= schema.columns.size()) {
-            std::cerr << "Error: Too many values for table '" << current_query.table_name << "'" << std::endl;
+            current_query.error_message = "Too many values for table '" + current_query.table_name + "'";
             return false;
         }
 
@@ -657,13 +690,13 @@ bool QueryParser::parseInsert(const std::vector<std::string>& tokens) {
             value_index++;
         }
         catch (...) {
-            std::cerr << "Error: Invalid value '" << token << "' for column '" << column_name << "'" << std::endl;
+            current_query.error_message = "Invalid value '" + token + "' for column '" + column_name + "'";
             return false;
         }
     }
 
     if (value_index != schema.columns.size()) {
-        std::cerr << "Error: Incorrect number of values for table '" << current_query.table_name << "'" << std::endl;
+        current_query.error_message = "Incorrect number of values for table '" + current_query.table_name + "'";
         return false;
     }
 
@@ -671,16 +704,15 @@ bool QueryParser::parseInsert(const std::vector<std::string>& tokens) {
     return true;
 }
 
-
 bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
     if (tokens.size() < 4) {
-        std::cerr << "Error: Invalid SELECT syntax" << std::endl;
+        current_query.error_message = "Invalid SELECT syntax: expected 'SELECT ... FROM table'";
         return false;
     }
     current_query.type = QueryType::SELECT;
     size_t from_pos = std::find(tokens.begin(), tokens.end(), "FROM") - tokens.begin();
     if (from_pos == tokens.size()) {
-        std::cerr << "Error: Missing FROM clause" << std::endl;
+        current_query.error_message = "Missing FROM clause";
         return false;
     }
     std::vector<std::string> columns;
@@ -695,30 +727,30 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
         columns.push_back("*");
     }
     if (from_pos + 1 >= tokens.size()) {
-        std::cerr << "Error: Missing table name after FROM" << std::endl;
+        current_query.error_message = "Missing table name after FROM";
         return false;
     }
     current_query.table_name = tokens[from_pos + 1];
     size_t join_pos = std::find(tokens.begin(), tokens.end(), "JOIN") - tokens.begin();
     if (join_pos < tokens.size()) {
         if (join_pos + 1 >= tokens.size()) {
-            std::cerr << "Error: Missing join table name" << std::endl;
+            current_query.error_message = "Missing join table name";
             return false;
         }
         current_query.join_table_name = tokens[join_pos + 1];
         size_t on_pos = std::find(tokens.begin(), tokens.end(), "ON") - tokens.begin();
         if (on_pos == tokens.size()) {
-            std::cerr << "Error: Missing ON clause" << std::endl;
+            current_query.error_message = "Missing ON clause";
             return false;
         }
         if (on_pos + 3 >= tokens.size() || tokens[on_pos + 2] != "=") {
-            std::cerr << "Error: Invalid ON condition, expected 'table1.col = table2.col'" << std::endl;
+            current_query.error_message = "Invalid ON condition: expected 'table1.col = table2.col'";
             return false;
         }
         std::string left_col = tokens[on_pos + 1]; // table1.col1
         std::string right_col = tokens[on_pos + 3]; // table2.col2
         if (left_col.find('.') == std::string::npos || right_col.find('.') == std::string::npos) {
-            std::cerr << "Error: ON condition must specify table.column" << std::endl;
+            current_query.error_message = "ON condition must specify table.column";
             return false;
         }
         Condition join_cond;
@@ -726,18 +758,16 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
         join_cond.op = "=";
         join_cond.value = right_col; // Store as string, resolved in joinTables
         current_query.join_condition = join_cond;
-        std::cerr << "Parsed JOIN: " << current_query.table_name << " JOIN "
-                  << current_query.join_table_name << " ON " << left_col << " = " << right_col << std::endl;
     }
     TableSchema schema1 = db_manager.getTableSchema(current_query.table_name);
     if (schema1.name.empty()) {
-        std::cerr << "Error: Table '" << current_query.table_name << "' does not exist" << std::endl;
+        current_query.error_message = "Table '" + current_query.table_name + "' does not exist";
         return false;
     }
     if (!current_query.join_table_name.empty()) {
         TableSchema schema2 = db_manager.getTableSchema(current_query.join_table_name);
         if (schema2.name.empty()) {
-            std::cerr << "Error: Join table '" << current_query.join_table_name << "' does not exist" << std::endl;
+            current_query.error_message = "Join table '" + current_query.join_table_name + "' does not exist";
             return false;
         }
     }
@@ -760,8 +790,8 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
                 }
             }
             if (!found) {
-                std::cerr << "Error: Column '" << col << "' does not exist in table '"
-                          << current_query.table_name << "' or '" << current_query.join_table_name << "'" << std::endl;
+                current_query.error_message = "Column '" + col + "' does not exist in table '" +
+                                             current_query.table_name + "' or '" + current_query.join_table_name + "'";
                 return false;
             }
         }
@@ -776,12 +806,11 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
             std::transform(token.begin(), token.end(), token.begin(), ::toupper);
             if (token == "AND" || token == "OR" || token == "NOT") {
                 current_query.condition_operators.push_back(token);
-                std::cerr << "Parsed operator: " << token << std::endl;
                 i++;
                 continue;
             }
             if (i + 2 >= tokens.size()) {
-                std::cerr << "Error: Incomplete WHERE condition" << std::endl;
+                current_query.error_message = "Incomplete WHERE condition";
                 return false;
             }
             Condition cond;
@@ -789,23 +818,16 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
             cond.op = tokens[i + 1];
             cond.value = parseValue(tokens[i + 2]);
             current_query.conditions.push_back(cond);
-            std::cerr << "Parsed condition: " << cond.column << " " << cond.op << " ";
-            std::visit([](auto&& arg) { std::cerr << arg; }, cond.value);
-            std::cerr << std::endl;
             i += 3;
         }
-        std::cerr << "All condition operators: ";
-        for (const auto& op : current_query.condition_operators) {
-            std::cerr << "'" << op << "' ";
-        }
-        std::cerr << std::endl;
         size_t expected_ops = current_query.conditions.size() - 1;
         size_t not_count = std::count(current_query.condition_operators.begin(),
                                      current_query.condition_operators.end(), "NOT");
         if (current_query.condition_operators.size() < expected_ops ||
             current_query.condition_operators.size() > expected_ops + not_count) {
-            std::cerr << "Error: Mismatched operators (" << current_query.condition_operators.size()
-                      << ") for conditions (" << current_query.conditions.size() << ")" << std::endl;
+            current_query.error_message = "Mismatched operators (" +
+                                         std::to_string(current_query.condition_operators.size()) +
+                                         ") for conditions (" + std::to_string(current_query.conditions.size()) + ")";
             return false;
         }
     }
@@ -814,7 +836,7 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
 
 bool QueryParser::parseUpdate(const std::vector<std::string>& tokens) {
     if (tokens.size() < 6) {
-        std::cerr << "Error: Invalid UPDATE syntax" << std::endl;
+        current_query.error_message = "Invalid UPDATE syntax: expected 'UPDATE table SET ...'";
         return false;
     }
     
@@ -824,7 +846,7 @@ bool QueryParser::parseUpdate(const std::vector<std::string>& tokens) {
     // Find SET keyword
     size_t set_pos = std::find(tokens.begin(), tokens.end(), "SET") - tokens.begin();
     if (set_pos == tokens.size()) {
-        std::cerr << "Error: Missing SET clause" << std::endl;
+        current_query.error_message = "Missing SET clause";
         return false;
     }
     
@@ -851,13 +873,12 @@ bool QueryParser::parseUpdate(const std::vector<std::string>& tokens) {
             
             if (token == "AND" || token == "OR" || token == "NOT") {
                 current_query.condition_operators.push_back(token);
-                std::cerr << "Parsed operator: " << token << std::endl;
                 i++;
                 continue;
             }
             
             if (i + 2 >= tokens.size()) {
-                std::cerr << "Error: Incomplete WHERE condition" << std::endl;
+                current_query.error_message = "Incomplete WHERE condition";
                 return false;
             }
             
@@ -866,18 +887,8 @@ bool QueryParser::parseUpdate(const std::vector<std::string>& tokens) {
             cond.op = tokens[i + 1];
             cond.value = parseValue(tokens[i + 2]);
             current_query.conditions.push_back(cond);
-            std::cerr << "Parsed condition: " << cond.column << " " << cond.op << " ";
-            std::visit([](auto&& arg) { std::cerr << arg; }, cond.value);
-            std::cerr << std::endl;
             i += 3;
         }
-        
-        // Debug: Print all operators
-        std::cerr << "All condition operators: ";
-        for (const auto& op : current_query.condition_operators) {
-            std::cerr << "'" << op << "' ";
-        }
-        std::cerr << std::endl;
         
         // Validate operator count
         size_t expected_ops = current_query.conditions.size() - 1;
@@ -885,8 +896,9 @@ bool QueryParser::parseUpdate(const std::vector<std::string>& tokens) {
                                      current_query.condition_operators.end(), "NOT");
         if (current_query.condition_operators.size() < expected_ops || 
             current_query.condition_operators.size() > expected_ops + not_count) {
-            std::cerr << "Error: Mismatched operators (" << current_query.condition_operators.size() 
-                      << ") for conditions (" << current_query.conditions.size() << ")" << std::endl;
+            current_query.error_message = "Mismatched operators (" +
+                                         std::to_string(current_query.condition_operators.size()) +
+                                         ") for conditions (" + std::to_string(current_query.conditions.size()) + ")";
             return false;
         }
     }
@@ -896,7 +908,7 @@ bool QueryParser::parseUpdate(const std::vector<std::string>& tokens) {
 
 bool QueryParser::parseDelete(const std::vector<std::string>& tokens) {
     if (tokens.size() < 3) {
-        std::cerr << "Error: Invalid DELETE syntax" << std::endl;
+        current_query.error_message = "Invalid DELETE syntax: expected 'DELETE FROM table'";
         return false;
     }
     
@@ -915,13 +927,12 @@ bool QueryParser::parseDelete(const std::vector<std::string>& tokens) {
             
             if (token == "AND" || token == "OR" || token == "NOT") {
                 current_query.condition_operators.push_back(token);
-                std::cerr << "Parsed operator: " << token << std::endl;
                 i++;
                 continue;
             }
             
             if (i + 2 >= tokens.size()) {
-                std::cerr << "Error: Incomplete WHERE condition" << std::endl;
+                current_query.error_message = "Incomplete WHERE condition";
                 return false;
             }
             
@@ -930,18 +941,8 @@ bool QueryParser::parseDelete(const std::vector<std::string>& tokens) {
             cond.op = tokens[i + 1];
             cond.value = parseValue(tokens[i + 2]);
             current_query.conditions.push_back(cond);
-            std::cerr << "Parsed condition: " << cond.column << " " << cond.op << " ";
-            std::visit([](auto&& arg) { std::cerr << arg; }, cond.value);
-            std::cerr << std::endl;
             i += 3;
         }
-        
-        // Debug: Print all operators
-        std::cerr << "All condition operators: ";
-        for (const auto& op : current_query.condition_operators) {
-            std::cerr << "'" << op << "' ";
-        }
-        std::cerr << std::endl;
         
         // Validate operator count
         size_t expected_ops = current_query.conditions.size() - 1;
@@ -949,8 +950,9 @@ bool QueryParser::parseDelete(const std::vector<std::string>& tokens) {
                                      current_query.condition_operators.end(), "NOT");
         if (current_query.condition_operators.size() < expected_ops || 
             current_query.condition_operators.size() > expected_ops + not_count) {
-            std::cerr << "Error: Mismatched operators (" << current_query.condition_operators.size() 
-                      << ") for conditions (" << current_query.conditions.size() << ")" << std::endl;
+            current_query.error_message = "Mismatched operators (" +
+                                         std::to_string(current_query.condition_operators.size()) +
+                                         ") for conditions (" + std::to_string(current_query.conditions.size()) + ")";
             return false;
         }
     }
