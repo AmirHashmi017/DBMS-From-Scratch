@@ -257,34 +257,30 @@ bool QueryParser::execute() {
             current_query.type = QueryType::UPDATE;
             if (!parseUpdate(tokens)) return false;
             std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
-            std::vector<std::string> operators;
             
             for (const auto& cond : current_query.conditions) {
                 conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
-                operators.push_back(cond.op == "NOT" ? "NOT" : "AND");
             }
             
             success &= db_manager.updateRecordsWithFilter(
                 current_query.table_name,
                 current_query.values,
                 conditions,
-                operators
+                current_query.condition_operators // Use parsed operators
             );
         } else if (command == "DELETE") {
             current_query.type = QueryType::DELETE_OP;
             if (!parseDelete(tokens)) return false;
             std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
-            std::vector<std::string> operators;
             
             for (const auto& cond : current_query.conditions) {
                 conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
-                operators.push_back(cond.op == "NOT" ? "NOT" : "AND");
             }
             
             success &= db_manager.deleteRecordsWithFilter(
                 current_query.table_name,
                 conditions,
-                operators
+                current_query.condition_operators // Use parsed operators
             ) >= 0;
         }
     }
@@ -793,33 +789,56 @@ bool QueryParser::parseUpdate(const std::vector<std::string>& tokens) {
     }
     current_query.values = values;
     
-    // Parse WHERE conditions
+    // Parse WHERE conditions if present
     size_t where_pos = std::find(tokens.begin(), tokens.end(), "WHERE") - tokens.begin();
     if (where_pos < tokens.size()) {
-        std::vector<Condition> conditions;
-        std::vector<std::string> operators;
+        current_query.conditions.clear();
+        current_query.condition_operators.clear();
         
-        for (size_t i = where_pos + 1; i < tokens.size(); i++) {
-            if (i + 2 >= tokens.size()) break;
-            
+        for (size_t i = where_pos + 1; i < tokens.size(); ) {
             std::string token = tokens[i];
             std::transform(token.begin(), token.end(), token.begin(), ::toupper);
             
             if (token == "AND" || token == "OR" || token == "NOT") {
-                operators.push_back(token);
+                current_query.condition_operators.push_back(token);
+                std::cerr << "Parsed operator: " << token << std::endl;
+                i++;
                 continue;
+            }
+            
+            if (i + 2 >= tokens.size()) {
+                std::cerr << "Error: Incomplete WHERE condition" << std::endl;
+                return false;
             }
             
             Condition cond;
             cond.column = tokens[i];
             cond.op = tokens[i + 1];
             cond.value = parseValue(tokens[i + 2]);
-            conditions.push_back(cond);
-            i += 2;
+            current_query.conditions.push_back(cond);
+            std::cerr << "Parsed condition: " << cond.column << " " << cond.op << " ";
+            std::visit([](auto&& arg) { std::cerr << arg; }, cond.value);
+            std::cerr << std::endl;
+            i += 3;
         }
         
-        current_query.conditions = conditions;
-        current_query.condition_operators = operators;
+        // Debug: Print all operators
+        std::cerr << "All condition operators: ";
+        for (const auto& op : current_query.condition_operators) {
+            std::cerr << "'" << op << "' ";
+        }
+        std::cerr << std::endl;
+        
+        // Validate operator count
+        size_t expected_ops = current_query.conditions.size() - 1;
+        size_t not_count = std::count(current_query.condition_operators.begin(), 
+                                     current_query.condition_operators.end(), "NOT");
+        if (current_query.condition_operators.size() < expected_ops || 
+            current_query.condition_operators.size() > expected_ops + not_count) {
+            std::cerr << "Error: Mismatched operators (" << current_query.condition_operators.size() 
+                      << ") for conditions (" << current_query.conditions.size() << ")" << std::endl;
+            return false;
+        }
     }
     
     return true;
@@ -834,33 +853,56 @@ bool QueryParser::parseDelete(const std::vector<std::string>& tokens) {
     current_query.type = QueryType::DELETE_OP;
     current_query.table_name = tokens[2];
     
-    // Parse WHERE conditions
+    // Parse WHERE conditions if present
     size_t where_pos = std::find(tokens.begin(), tokens.end(), "WHERE") - tokens.begin();
     if (where_pos < tokens.size()) {
-        std::vector<Condition> conditions;
-        std::vector<std::string> operators;
+        current_query.conditions.clear();
+        current_query.condition_operators.clear();
         
-        for (size_t i = where_pos + 1; i < tokens.size(); i++) {
-            if (i + 2 >= tokens.size()) break;
-            
+        for (size_t i = where_pos + 1; i < tokens.size(); ) {
             std::string token = tokens[i];
             std::transform(token.begin(), token.end(), token.begin(), ::toupper);
             
             if (token == "AND" || token == "OR" || token == "NOT") {
-                operators.push_back(token);
+                current_query.condition_operators.push_back(token);
+                std::cerr << "Parsed operator: " << token << std::endl;
+                i++;
                 continue;
+            }
+            
+            if (i + 2 >= tokens.size()) {
+                std::cerr << "Error: Incomplete WHERE condition" << std::endl;
+                return false;
             }
             
             Condition cond;
             cond.column = tokens[i];
             cond.op = tokens[i + 1];
             cond.value = parseValue(tokens[i + 2]);
-            conditions.push_back(cond);
-            i += 2;
+            current_query.conditions.push_back(cond);
+            std::cerr << "Parsed condition: " << cond.column << " " << cond.op << " ";
+            std::visit([](auto&& arg) { std::cerr << arg; }, cond.value);
+            std::cerr << std::endl;
+            i += 3;
         }
         
-        current_query.conditions = conditions;
-        current_query.condition_operators = operators;
+        // Debug: Print all operators
+        std::cerr << "All condition operators: ";
+        for (const auto& op : current_query.condition_operators) {
+            std::cerr << "'" << op << "' ";
+        }
+        std::cerr << std::endl;
+        
+        // Validate operator count
+        size_t expected_ops = current_query.conditions.size() - 1;
+        size_t not_count = std::count(current_query.condition_operators.begin(), 
+                                     current_query.condition_operators.end(), "NOT");
+        if (current_query.condition_operators.size() < expected_ops || 
+            current_query.condition_operators.size() > expected_ops + not_count) {
+            std::cerr << "Error: Mismatched operators (" << current_query.condition_operators.size() 
+                      << ") for conditions (" << current_query.conditions.size() << ")" << std::endl;
+            return false;
+        }
     }
     
     return true;
