@@ -277,54 +277,60 @@ bool QueryParser::execute() {
                 current_query.error_message = "Failed to insert record into table '" + current_query.table_name + "'";
             }
         } else if (command == "SELECT") {
-            current_query.type = QueryType::SELECT;
-            TableSchema schema1 = db_manager.getTableSchema(current_query.table_name);
-            if (schema1.name.empty()) {
-                current_query.error_message = "Table '" + current_query.table_name + "' does not exist";
-                return false;
-            }
-            if (!current_query.join_table_name.empty()) {
-                TableSchema schema2 = db_manager.getTableSchema(current_query.join_table_name);
-                if (schema2.name.empty()) {
-                    current_query.error_message = "Join table '" + current_query.join_table_name + "' does not exist";
-                    return false;
-                }
-                // Handle JOIN query
-                std::vector<std::tuple<std::string, std::string, FieldValue>> join_conditions;
-                for (const auto& cond : current_query.conditions) {
-                    join_conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
-                }
-                results = db_manager.joinTables(
-                    current_query.table_name,
-                    current_query.join_table_name,
-                    current_query.join_condition,
-                    join_conditions,
-                    current_query.condition_operators
-                );
-                if (results.empty() && !join_conditions.empty()) {
-                    current_query.error_message = "No records match the JOIN conditions";
-                }
-            } else if (current_query.conditions.empty()) {
-                results = db_manager.getAllRecords(current_query.table_name);
-                if (results.empty()) {
-                    current_query.error_message = "No records found in table '" + current_query.table_name + "'";
-                }
-            } else {
-                std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
-                for (const auto& cond : current_query.conditions) {
-                    conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
-                }
-                results = db_manager.searchRecordsWithFilter(
-                    current_query.table_name,
-                    conditions,
-                    current_query.condition_operators
-                );
-                if (results.empty()) {
-                    current_query.error_message = "No records match the WHERE conditions in table '" + current_query.table_name + "'";
-                }
-            }
-            records_found = results.size();
-        } else if (command == "UPDATE") {
+    current_query.type = QueryType::SELECT;
+    TableSchema schema1 = db_manager.getTableSchema(current_query.table_name);
+    if (schema1.name.empty()) {
+        current_query.error_message = "Table '" + current_query.table_name + "' does not exist";
+        return false;
+    }
+    if (!current_query.join_table_name.empty()) {
+        TableSchema schema2 = db_manager.getTableSchema(current_query.join_table_name);
+        if (schema2.name.empty()) {
+            current_query.error_message = "Join table '" + current_query.join_table_name + "' does not exist";
+            return false;
+        }
+        // Handle JOIN query
+        std::vector<std::tuple<std::string, std::string, FieldValue>> join_conditions;
+        for (const auto& cond : current_query.conditions) {
+            join_conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
+        }
+        results = db_manager.joinTables(
+            current_query.table_name,
+            current_query.join_table_name,
+            current_query.join_condition,
+            join_conditions,
+            current_query.condition_operators
+        );
+        // Filter results to include only requested columns
+        results = filterRecordsByColumns(results, current_query.select_columns);
+        if (results.empty() && !join_conditions.empty()) {
+            current_query.error_message = "No records match the JOIN conditions";
+        }
+    } else if (current_query.conditions.empty()) {
+        results = db_manager.getAllRecords(current_query.table_name);
+        // Filter results to include only requested columns
+        results = filterRecordsByColumns(results, current_query.select_columns);
+        if (results.empty()) {
+            current_query.error_message = "No records found in table '" + current_query.table_name + "'";
+        }
+    } else {
+        std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
+        for (const auto& cond : current_query.conditions) {
+            conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
+        }
+        results = db_manager.searchRecordsWithFilter(
+            current_query.table_name,
+            conditions,
+            current_query.condition_operators
+        );
+        // Filter results to include only requested columns
+        results = filterRecordsByColumns(results, current_query.select_columns);
+        if (results.empty()) {
+            current_query.error_message = "No records match the WHERE conditions in table '" + current_query.table_name + "'";
+        }
+    }
+    records_found = results.size();
+} else if (command == "UPDATE") {
             current_query.type = QueryType::UPDATE;
             if (!parseUpdate(tokens)) {
                 current_query.error_message = "Failed to parse UPDATE command";
@@ -1063,4 +1069,36 @@ Column::Type QueryParser::parseColumnType(const std::string& type_str) {
     if (type == "BOOL") return Column::BOOL;
     
     throw std::runtime_error("Unknown column type: " + type_str);
+}
+std::vector<Record> QueryParser::filterRecordsByColumns(const std::vector<Record>& records, const std::vector<std::string>& columns) {
+    if (columns.size() == 1 && columns[0] == "*") {
+        return records; // Return all columns if "*" is specified
+    }
+
+    std::vector<Record> filtered_records;
+    for (const auto& record : records) {
+        Record filtered_record;
+        for (const auto& col : columns) {
+            // Use the full column name from the query (e.g., "users.name", "orders.order_id")
+            std::string full_col_name = col;
+            // Try the full column name first (e.g., "users.name")
+            if (record.find(full_col_name) != record.end()) {
+                filtered_record[full_col_name] = record.at(full_col_name);
+                continue;
+            }
+            // Try the base column name (e.g., "name", "order_id")
+            size_t dot_pos = col.find('.');
+            if (dot_pos != std::string::npos) {
+                std::string base_col_name = col.substr(dot_pos + 1);
+                if (record.find(base_col_name) != record.end()) {
+                    filtered_record[full_col_name] = record.at(base_col_name);
+                }
+            }
+        }
+        // Only include non-empty records
+        if (!filtered_record.empty()) {
+            filtered_records.push_back(filtered_record);
+        }
+    }
+    return filtered_records;
 }

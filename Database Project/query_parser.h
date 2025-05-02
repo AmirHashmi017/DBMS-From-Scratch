@@ -72,6 +72,7 @@ private:
     bool parseSelect(const std::vector<std::string>& tokens);
     bool parseUpdate(const std::vector<std::string>& tokens);
     bool parseDelete(const std::vector<std::string>& tokens);
+    std::vector<Record> filterRecordsByColumns(const std::vector<Record>& records, const std::vector<std::string>& columns);
 
     // Helper methods
     std::vector<std::string> tokenize(const std::string& query);
