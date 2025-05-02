@@ -3,7 +3,8 @@
 #include <system_error>
 #include <set>
 #include "database_manager.h"
-
+#include <thread>
+#include <chrono>
 
 // Get the executable path helper function
 
@@ -249,18 +250,15 @@ void DatabaseManager::createIndex(const TableSchema& schema) {
 void DatabaseManager::loadIndexes() {
     for (const auto& table : catalog.tables) {
         std::cout << "Loading index for table " << table.name << " from " << table.index_file_path << std::endl;
-
-        // Check if the index file exists
         if (std::filesystem::exists(table.index_file_path)) {
             auto* index = new BPlusTree(table.index_file_path);
             indexes[table.name] = index;
-        }
-        else {
-            std::cout << "Index file doesn't exist yet. Will be created on first insert." << std::endl;
-            createIndex(table);
+        } else {
+            std::cout << "Index file does not exist: " << table.index_file_path << std::endl;
         }
     }
 }
+
 
 bool DatabaseManager::insertRecord(const std::string& table_name, const Record& record) {
     // Validate table name
@@ -1200,21 +1198,37 @@ bool DatabaseManager::dropDatabase(const std::string& db_name) {
 }
 
 bool DatabaseManager::useDatabase(const std::string& db_name) {
-    std::filesystem::path dbDir = getDatabasePath(db_name);
+    // Check if already using this database
+    if (current_database == db_name) {
+        std::cout << "Already using database: " << db_name << std::endl;
+        return true;
+    }
 
-    if (!std::filesystem::exists(dbDir)) {
+    // Validate database exists
+    std::filesystem::path db_path = "db_data/" + db_name;
+    if (!std::filesystem::exists(db_path)) {
         std::cerr << "Database '" << db_name << "' does not exist." << std::endl;
         return false;
     }
 
+    // Clear existing context
+    current_database.clear();
+    catalog.tables.clear();
+    for (auto& index : indexes) {
+        index.second->close();
+        delete index.second;
+    }
+    indexes.clear();
+
+    // Set new database
     current_database = db_name;
-    catalog_path = (dbDir / "catalog.bin").string();
-
-    // Reload the catalog for the new database
+    catalog_path = (db_path / "catalog.bin").string(); // Convert path to string
     catalog.load(catalog_path);
+    std::cout << "Switching to database: " << db_name << std::endl;
 
-    // Reload indexes for the new database
+    // Load indexes
     loadIndexes();
+    std::cout << "Loaded indexes for database: " << db_name << std::endl;
 
     return true;
 }
@@ -1241,33 +1255,78 @@ bool DatabaseManager::dropTable(const std::string& table_name) {
         return false;
     }
 
-    // Delete the table's data file
-    if (std::filesystem::exists(schema.data_file_path)) {
-        std::filesystem::remove(schema.data_file_path);
-    }
+    // Save current database
+    std::string saved_database = current_database;
 
-    // Delete the table's index file
-    if (std::filesystem::exists(schema.index_file_path)) {
-        std::filesystem::remove(schema.index_file_path);
-    }
+    try {
+        // Close and remove the index from memory
+        auto it = indexes.find(table_name);
+        if (it != indexes.end()) {
+            it->second->close(); // Close the BPlusTree file handle
+            delete it->second;
+            indexes.erase(it);
+            std::cout << "Closed and removed index for table: " << table_name << std::endl;
+        }
 
-    // Remove and delete the index from memory
-    auto it = indexes.find(table_name);
-    if (it != indexes.end()) {
-        delete it->second;
-        indexes.erase(it);
-    }
+        // Remove table from catalog first
+        if (!catalog.removeTable(table_name)) {
+            std::cerr << "Failed to remove table from catalog." << std::endl;
+            current_database = saved_database;
+            return false;
+        }
 
-    // Remove table from catalog
-    if (!catalog.removeTable(table_name)) {
-        std::cerr << "Failed to remove table from catalog." << std::endl;
+        // Save the updated catalog
+        catalog.save(catalog_path);
+        std::cout << "Catalog updated for table: " << table_name << std::endl;
+
+        // Clear database context to prevent reloading
+        current_database.clear(); // Temporarily "unuse" database
+        indexes.clear(); // Ensure no indexes remain active
+        std::cout << "Cleared database context for table: " << table_name << std::endl;
+
+        // Delete the table's data file
+        std::error_code ec;
+        if (std::filesystem::exists(schema.data_file_path)) {
+            ensureWritePermissions(schema.data_file_path);
+            if (!std::filesystem::remove(schema.data_file_path, ec)) {
+                std::cerr << "Failed to delete data file: " << ec.message() << std::endl;
+                current_database = saved_database;
+                return false;
+            }
+            std::cout << "Deleted data file: " << schema.data_file_path << std::endl;
+        } else {
+            std::cout << "Data file does not exist: " << schema.data_file_path << std::endl;
+        }
+
+        // Delete the table's index file with delay
+        if (std::filesystem::exists(schema.index_file_path)) {
+            ensureWritePermissions(schema.index_file_path);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Wait for handle release
+            if (!std::filesystem::remove(schema.index_file_path, ec)) {
+                std::cerr << "Failed to delete index file: " << ec.message() << std::endl;
+                current_database = saved_database;
+                return false;
+            }
+            std::cout << "Deleted index file: " << schema.index_file_path << std::endl;
+        } else {
+            std::cout << "Index file does not exist: " << schema.index_file_path << std::endl;
+        }
+
+        // Restore database context without reloading indexes
+        current_database = saved_database;
+        std::cout << "Restored database context: " << current_database << std::endl;
+
+        return true;
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "Filesystem error in dropTable: " << e.what() << std::endl;
+        std::cerr << "Path: " << e.path1() << std::endl;
+        current_database = saved_database;
+        return false;
+    } catch (const std::exception& e) {
+        std::cerr << "Unexpected error in dropTable: " << e.what() << std::endl;
+        current_database = saved_database;
         return false;
     }
-
-    // Save the updated catalog
-    catalog.save(catalog_path);
-
-    return true;
 }
 
 std::vector<std::string> DatabaseManager::listDatabases() const {

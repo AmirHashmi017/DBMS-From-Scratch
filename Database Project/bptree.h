@@ -21,6 +21,7 @@ public:
     BPlusTree(const std::string& index_file);
     ~BPlusTree();
     void insert(int key, int data_offset);
+    void close();
     std::vector<int> search(int key);
     int get_root_offset() const;
     BPlusNode get_node(int offset) const;
@@ -32,6 +33,7 @@ private:
     BPlusNode read_node(int offset) const;
     void write_node(int offset, const BPlusNode& node);
     void split_node(BPlusNode& node, int offset);
+    bool is_closed;
 };
 
 #endif

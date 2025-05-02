@@ -1,8 +1,7 @@
 #include "bptree.h"
 #include <iostream>
 
-BPlusTree::BPlusTree(const std::string& index_file) : root_offset(-1) {
-    // Make sure the directory exists before opening the file
+BPlusTree::BPlusTree(const std::string& index_file) : root_offset(-1), is_closed(false) {
     std::filesystem::path indexPath(index_file);
     std::filesystem::create_directories(indexPath.parent_path());
 
@@ -10,12 +9,11 @@ BPlusTree::BPlusTree(const std::string& index_file) : root_offset(-1) {
     if (!file) {
         std::cout << "Creating new index file: " << index_file << std::endl;
         file.clear();
-        file.open(index_file, std::ios::binary | std::ios::out | std::ios::trunc); // Create file if it doesn't exist
+        file.open(index_file, std::ios::binary | std::ios::out | std::ios::trunc);
         file.close();
         file.open(index_file, std::ios::binary | std::ios::in | std::ios::out);
     }
 
-    // Read root_offset from the first 4 bytes of the file
     file.seekg(0, std::ios::end);
     if (file.tellg() >= sizeof(root_offset)) {
         file.seekg(0);
@@ -24,12 +22,7 @@ BPlusTree::BPlusTree(const std::string& index_file) : root_offset(-1) {
 }
 
 BPlusTree::~BPlusTree() {
-    if (file.is_open()) {
-        // Always write root_offset to the start of the file
-        file.seekp(0);
-        file.write(reinterpret_cast<const char*>(&root_offset), sizeof(root_offset));
-        file.close();
-    }
+    close(); // Reuse close method for consistency
 }
 
 int BPlusTree::get_root_offset() const {
@@ -41,6 +34,10 @@ BPlusNode BPlusTree::get_node(int offset) const {
 }
 
 BPlusNode BPlusTree::read_node(int offset) const {
+    if (is_closed) {
+        std::cerr << "Error: Attempt to read from closed BPlusTree file" << std::endl;
+        return BPlusNode();
+    }
     BPlusNode node;
     file.seekg(offset);
     if (!file) {
@@ -48,10 +45,9 @@ BPlusNode BPlusTree::read_node(int offset) const {
         file.clear();
         return node;
     }
-
+    // Rest unchanged
     file.read(reinterpret_cast<char*>(&node.is_leaf), sizeof(node.is_leaf));
     file.read(reinterpret_cast<char*>(&node.parent), sizeof(node.parent));
-
     int key_count;
     file.read(reinterpret_cast<char*>(&key_count), sizeof(key_count));
     if (key_count < 0 || key_count > FANOUT) {
@@ -59,44 +55,40 @@ BPlusNode BPlusTree::read_node(int offset) const {
         file.clear();
         return node;
     }
-
     node.keys.resize(key_count);
     file.read(reinterpret_cast<char*>(node.keys.data()), key_count * sizeof(int));
-
     if (node.is_leaf) {
         node.data_ptrs.resize(key_count);
         file.read(reinterpret_cast<char*>(node.data_ptrs.data()), key_count * sizeof(int));
-    }
-    else {
+    } else {
         node.children.resize(key_count + 1);
         file.read(reinterpret_cast<char*>(node.children.data()), (key_count + 1) * sizeof(int));
     }
-
     return node;
 }
 
 void BPlusTree::write_node(int offset, const BPlusNode& node) {
+    if (is_closed) {
+        std::cerr << "Error: Attempt to write to closed BPlusTree file" << std::endl;
+        return;
+    }
     file.seekp(offset);
     if (!file) {
         std::cerr << "Error: Failed to seek to offset " << offset << std::endl;
         file.clear();
         return;
     }
-
+    // Rest unchanged
     file.write(reinterpret_cast<const char*>(&node.is_leaf), sizeof(node.is_leaf));
     file.write(reinterpret_cast<const char*>(&node.parent), sizeof(node.parent));
-
     int key_count = node.keys.size();
     file.write(reinterpret_cast<const char*>(&key_count), sizeof(key_count));
     file.write(reinterpret_cast<const char*>(node.keys.data()), key_count * sizeof(int));
-
     if (node.is_leaf) {
         file.write(reinterpret_cast<const char*>(node.data_ptrs.data()), key_count * sizeof(int));
-    }
-    else {
+    } else {
         file.write(reinterpret_cast<const char*>(node.children.data()), (key_count + 1) * sizeof(int));
     }
-
     file.flush();
 }
 
@@ -317,4 +309,19 @@ std::vector<int> BPlusTree::search(int key) {
     }
 
     return result;
+}
+void BPlusTree::close() {
+    if (file.is_open() && !is_closed) {
+        file.seekp(0);
+        file.write(reinterpret_cast<const char*>(&root_offset), sizeof(root_offset));
+        file.flush(); // Ensure all writes are committed
+        file.close();
+        is_closed = true;
+        std::cerr << "Closed BPlusTree file at offset: " << root_offset << std::endl;
+        if (file.is_open()) {
+            std::cerr << "Warning: BPlusTree file failed to close" << std::endl;
+        }
+    } else if (is_closed) {
+        std::cerr << "BPlusTree file already closed" << std::endl;
+    }
 }
