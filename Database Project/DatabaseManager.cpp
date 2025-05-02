@@ -5,6 +5,7 @@
 #include "database_manager.h"
 #include <thread>
 #include <chrono>
+#include "query_parser.h"
 
 // Get the executable path helper function
 
@@ -1108,6 +1109,99 @@ int DatabaseManager::deleteRecordsWithFilter(
     return records_deleted;
 }
 
+std::vector<Record> DatabaseManager::joinTables(
+    const std::string& table1_name,
+    const std::string& table2_name,
+    const Condition& join_condition,
+    const std::vector<std::tuple<std::string, std::string, FieldValue>>& where_conditions,
+    const std::vector<std::string>& where_operators) {
+    
+    std::vector<Record> results;
+    
+   TableSchema schema1, schema2;
+bool found1 = false, found2 = false;
+for (const auto& table : catalog.tables) {
+    if (table.name == table1_name) {
+        schema1 = table;
+        found1 = true;
+    } else if (table.name == table2_name) {
+        schema2 = table;
+        found2 = true;
+    }
+}
+    
+    if (!found1) {
+        std::cerr << "Table '" << table1_name << "' not found" << std::endl;
+        return results;
+    }
+    if (!found2) {
+        std::cerr << "Table '" << table2_name << "' not found" << std::endl;
+        return results;
+    }
+    
+    // Get all records from both tables
+    std::vector<Record> records1 = getAllRecords(table1_name);
+    std::vector<Record> records2 = getAllRecords(table2_name);
+    
+    // Extract join condition columns
+    std::string left_col = join_condition.column; // e.g., users.id
+    std::string right_col = std::holds_alternative<std::string>(join_condition.value)
+        ? std::get<std::string>(join_condition.value) // e.g., orders.user_id
+        : "";
+    
+    // Validate join condition columns
+    std::string left_table = left_col.substr(0, left_col.find('.'));
+    std::string left_col_name = left_col.substr(left_col.find('.') + 1);
+    std::string right_table = right_col.substr(0, right_col.find('.'));
+    std::string right_col_name = right_col.substr(right_col.find('.') + 1);
+    
+    bool left_valid = false, right_valid = false;
+    for (const auto& col : schema1.columns) {
+        if (col.name == left_col_name && left_table == table1_name) {
+            left_valid = true;
+            break;
+        }
+    }
+    for (const auto& col : schema2.columns) {
+        if (col.name == right_col_name && right_table == table2_name) {
+            right_valid = true;
+            break;
+        }
+    }
+    
+    if (!left_valid || !right_valid) {
+        std::cerr << "Error: Invalid join condition columns: " << left_col << " = " << right_col << std::endl;
+        return results;
+    }
+    
+    // Perform nested loop join
+    for (const auto& rec1 : records1) {
+        for (const auto& rec2 : records2) {
+            // Check join condition (equality)
+            if (rec1.find(left_col_name) != rec1.end() && rec2.find(right_col_name) != rec2.end()) {
+                if (rec1.at(left_col_name) == rec2.at(right_col_name)) {
+                    // Combine records
+                    Record combined;
+                    for (const auto& [key, value] : rec1) {
+                        combined[table1_name + "." + key] = value;
+                    }
+                    for (const auto& [key, value] : rec2) {
+                        combined[table2_name + "." + key] = value;
+                    }
+                    
+                    // Apply WHERE conditions if any
+                    if (where_conditions.empty() || evaluateCondition(combined, where_conditions, where_operators)) {
+                        results.push_back(combined);
+                    }
+                }
+            }
+        }
+    }
+    
+    std::cout << "Joined " << results.size() << " records" << std::endl;
+    return results;
+}
+
 bool DatabaseManager::createDatabase(const std::string& db_name) {
     try {
         std::filesystem::path dbDir = getDatabasePath(db_name);
@@ -1196,6 +1290,9 @@ bool DatabaseManager::dropDatabase(const std::string& db_name) {
         return false;
     }
 }
+
+
+
 
 bool DatabaseManager::useDatabase(const std::string& db_name) {
     // Check if already using this database

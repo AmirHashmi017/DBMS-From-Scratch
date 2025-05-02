@@ -202,44 +202,63 @@ bool QueryParser::execute() {
             success &= db_manager.insertRecord(current_query.table_name, record);
         } else if (command == "SELECT") {
     current_query.type = QueryType::SELECT;
-    if (!parseSelect(tokens)) return false;
     std::vector<Record> results;
-    if (current_query.conditions.empty()) {
+    if (!current_query.join_table_name.empty()) {
+        // Handle JOIN query
+        std::vector<std::tuple<std::string, std::string, FieldValue>> join_conditions;
+        for (const auto& cond : current_query.conditions) {
+            join_conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
+        }
+        results = db_manager.joinTables(
+            current_query.table_name,
+            current_query.join_table_name,
+            current_query.join_condition,
+            join_conditions,
+            current_query.condition_operators
+        );
+    } else if (current_query.conditions.empty()) {
         results = db_manager.getAllRecords(current_query.table_name);
     } else {
         std::vector<std::tuple<std::string, std::string, FieldValue>> conditions;
-        std::vector<std::string> operators;
-        
         for (const auto& cond : current_query.conditions) {
             conditions.push_back(std::make_tuple(cond.column, cond.op, cond.value));
         }
-        operators = current_query.condition_operators;
-        
         results = db_manager.searchRecordsWithFilter(
             current_query.table_name,
             conditions,
-            operators
+            current_query.condition_operators
         );
     }
-    
-    // Get table schema to validate columns
-    TableSchema schema = db_manager.getTableSchema(current_query.table_name);
-    if (schema.name.empty()) {
+    TableSchema schema1 = db_manager.getTableSchema(current_query.table_name);
+    if (schema1.name.empty()) {
         std::cerr << "Error: Table '" << current_query.table_name << "' does not exist" << std::endl;
         return false;
     }
-    
-    // Prepare columns to display
+    TableSchema schema2;
+    if (!current_query.join_table_name.empty()) {
+        schema2 = db_manager.getTableSchema(current_query.join_table_name);
+        if (schema2.name.empty()) {
+            std::cerr << "Error: Join table '" << current_query.join_table_name << "' does not exist" << std::endl;
+            return false;
+        }
+    }
     std::vector<std::string> columns_to_display;
     if (current_query.select_columns.size() == 1 && current_query.select_columns[0] == "*") {
-        for (const auto& col : schema.columns) {
-            columns_to_display.push_back(col.name);
+        if (!current_query.join_table_name.empty()) {
+            for (const auto& col : schema1.columns) {
+                columns_to_display.push_back(current_query.table_name + "." + col.name);
+            }
+            for (const auto& col : schema2.columns) {
+                columns_to_display.push_back(current_query.join_table_name + "." + col.name);
+            }
+        } else {
+            for (const auto& col : schema1.columns) {
+                columns_to_display.push_back(col.name); // Use unqualified column names for non-join
+            }
         }
     } else {
         columns_to_display = current_query.select_columns;
     }
-    
-    // Print only the selected columns
     for (const auto& record : results) {
         bool first = true;
         for (const auto& col : columns_to_display) {
@@ -252,7 +271,7 @@ bool QueryParser::execute() {
         }
         std::cout << std::endl;
     }
-    success &= true;
+    success = true;
 } else if (command == "UPDATE") {
             current_query.type = QueryType::UPDATE;
             if (!parseUpdate(tokens)) return false;
@@ -658,17 +677,12 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
         std::cerr << "Error: Invalid SELECT syntax" << std::endl;
         return false;
     }
-    
     current_query.type = QueryType::SELECT;
-    
-    // Parse column list
     size_t from_pos = std::find(tokens.begin(), tokens.end(), "FROM") - tokens.begin();
     if (from_pos == tokens.size()) {
         std::cerr << "Error: Missing FROM clause" << std::endl;
         return false;
     }
-    
-    // Parse columns (between SELECT and FROM)
     std::vector<std::string> columns;
     for (size_t i = 1; i < from_pos; i++) {
         std::string col = tokens[i];
@@ -680,55 +694,96 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
     if (columns.empty()) {
         columns.push_back("*");
     }
-    
-    // Validate columns against table schema
+    if (from_pos + 1 >= tokens.size()) {
+        std::cerr << "Error: Missing table name after FROM" << std::endl;
+        return false;
+    }
     current_query.table_name = tokens[from_pos + 1];
-    TableSchema schema = db_manager.getTableSchema(current_query.table_name);
-    if (schema.name.empty()) {
+    size_t join_pos = std::find(tokens.begin(), tokens.end(), "JOIN") - tokens.begin();
+    if (join_pos < tokens.size()) {
+        if (join_pos + 1 >= tokens.size()) {
+            std::cerr << "Error: Missing join table name" << std::endl;
+            return false;
+        }
+        current_query.join_table_name = tokens[join_pos + 1];
+        size_t on_pos = std::find(tokens.begin(), tokens.end(), "ON") - tokens.begin();
+        if (on_pos == tokens.size()) {
+            std::cerr << "Error: Missing ON clause" << std::endl;
+            return false;
+        }
+        if (on_pos + 3 >= tokens.size() || tokens[on_pos + 2] != "=") {
+            std::cerr << "Error: Invalid ON condition, expected 'table1.col = table2.col'" << std::endl;
+            return false;
+        }
+        std::string left_col = tokens[on_pos + 1]; // table1.col1
+        std::string right_col = tokens[on_pos + 3]; // table2.col2
+        if (left_col.find('.') == std::string::npos || right_col.find('.') == std::string::npos) {
+            std::cerr << "Error: ON condition must specify table.column" << std::endl;
+            return false;
+        }
+        Condition join_cond;
+        join_cond.column = left_col;
+        join_cond.op = "=";
+        join_cond.value = right_col; // Store as string, resolved in joinTables
+        current_query.join_condition = join_cond;
+        std::cerr << "Parsed JOIN: " << current_query.table_name << " JOIN "
+                  << current_query.join_table_name << " ON " << left_col << " = " << right_col << std::endl;
+    }
+    TableSchema schema1 = db_manager.getTableSchema(current_query.table_name);
+    if (schema1.name.empty()) {
         std::cerr << "Error: Table '" << current_query.table_name << "' does not exist" << std::endl;
         return false;
     }
-    
+    if (!current_query.join_table_name.empty()) {
+        TableSchema schema2 = db_manager.getTableSchema(current_query.join_table_name);
+        if (schema2.name.empty()) {
+            std::cerr << "Error: Join table '" << current_query.join_table_name << "' does not exist" << std::endl;
+            return false;
+        }
+    }
     if (columns[0] != "*") {
         for (const auto& col : columns) {
             bool found = false;
-            for (const auto& schema_col : schema.columns) {
-                if (schema_col.name == col) {
+            for (const auto& schema_col : schema1.columns) {
+                if (schema_col.name == col || (current_query.table_name + "." + schema_col.name) == col) {
                     found = true;
                     break;
                 }
             }
+            if (!found && !current_query.join_table_name.empty()) {
+                TableSchema schema2 = db_manager.getTableSchema(current_query.join_table_name);
+                for (const auto& schema_col : schema2.columns) {
+                    if (schema_col.name == col || (current_query.join_table_name + "." + schema_col.name) == col) {
+                        found = true;
+                        break;
+                    }
+                }
+            }
             if (!found) {
-                std::cerr << "Error: Column '" << col << "' does not exist in table '" << current_query.table_name << "'" << std::endl;
+                std::cerr << "Error: Column '" << col << "' does not exist in table '"
+                          << current_query.table_name << "' or '" << current_query.join_table_name << "'" << std::endl;
                 return false;
             }
         }
     }
-    
     current_query.select_columns = columns;
-    
-    // Parse WHERE conditions if present
     size_t where_pos = std::find(tokens.begin(), tokens.end(), "WHERE") - tokens.begin();
     if (where_pos < tokens.size()) {
         current_query.conditions.clear();
         current_query.condition_operators.clear();
-        
         for (size_t i = where_pos + 1; i < tokens.size(); ) {
             std::string token = tokens[i];
             std::transform(token.begin(), token.end(), token.begin(), ::toupper);
-            
             if (token == "AND" || token == "OR" || token == "NOT") {
                 current_query.condition_operators.push_back(token);
                 std::cerr << "Parsed operator: " << token << std::endl;
                 i++;
                 continue;
             }
-            
             if (i + 2 >= tokens.size()) {
                 std::cerr << "Error: Incomplete WHERE condition" << std::endl;
                 return false;
             }
-            
             Condition cond;
             cond.column = tokens[i];
             cond.op = tokens[i + 1];
@@ -739,26 +794,21 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
             std::cerr << std::endl;
             i += 3;
         }
-        
-        // Debug: Print all operators
         std::cerr << "All condition operators: ";
         for (const auto& op : current_query.condition_operators) {
             std::cerr << "'" << op << "' ";
         }
         std::cerr << std::endl;
-        
-        // Validate operator count
         size_t expected_ops = current_query.conditions.size() - 1;
-        size_t not_count = std::count(current_query.condition_operators.begin(), 
+        size_t not_count = std::count(current_query.condition_operators.begin(),
                                      current_query.condition_operators.end(), "NOT");
-        if (current_query.condition_operators.size() < expected_ops || 
+        if (current_query.condition_operators.size() < expected_ops ||
             current_query.condition_operators.size() > expected_ops + not_count) {
-            std::cerr << "Error: Mismatched operators (" << current_query.condition_operators.size() 
+            std::cerr << "Error: Mismatched operators (" << current_query.condition_operators.size()
                       << ") for conditions (" << current_query.conditions.size() << ")" << std::endl;
             return false;
         }
     }
-    
     return true;
 }
 

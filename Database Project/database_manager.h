@@ -1,4 +1,3 @@
-// database_manager.h (updated)
 #ifndef DATABASE_MANAGER_H
 #define DATABASE_MANAGER_H
 
@@ -24,6 +23,9 @@
 using FieldValue = std::variant<int, float, std::string, bool>;
 using Record = std::map<std::string, FieldValue>;
 
+// Forward declaration of Condition struct
+struct Condition;
+
 // Comparison operators for FieldValue
 inline bool operator==(const FieldValue& lhs, const FieldValue& rhs) {
     if (std::holds_alternative<int>(lhs) && std::holds_alternative<int>(rhs))
@@ -46,7 +48,6 @@ public:
     DatabaseManager(const std::string& catalog_path = "catalog.bin");
     ~DatabaseManager();
 
-    // Create a new table
     bool createTable(
         const std::string& table_name,
         const std::vector<std::tuple<std::string, std::string, int>>& columns,
@@ -54,16 +55,12 @@ public:
         const std::map<std::string, std::pair<std::string, std::string>>& foreign_keys = {}
     );
 
-    // Insert a record into a table
     bool insertRecord(const std::string& table_name, const Record& record);
 
-    // Search for records in a table
     std::vector<Record> searchRecords(const std::string& table_name, const std::string& key_column, const FieldValue& key_value);
 
-    // List all tables
     std::vector<std::string> listTables() const;
 
-    // Get schema for a specific table
     TableSchema getTableSchema(const std::string& table_name) const;
     std::vector<Record> getAllRecords(const std::string& table_name);
     std::vector<Record> searchRecordsWithFilter(
@@ -87,16 +84,19 @@ public:
     bool dropTable(const std::string& table_name);
     std::vector<std::string> listDatabases() const;
     std::string getCurrentDatabase() const;
-
-
+    std::vector<Record> joinTables(
+        const std::string& table1_name,
+        const std::string& table2_name,
+        const Condition& join_condition,
+        const std::vector<std::tuple<std::string, std::string, FieldValue>>& where_conditions,
+        const std::vector<std::string>& where_operators);
 
 private:
     Catalog catalog;
     std::string catalog_path;
-    std::map<std::string, BPlusTree*> indexes; // Map of table name to index
+    std::map<std::string, BPlusTree*> indexes;
     std::string current_database;
 
-    // Helper methods
     Column::Type stringToColumnType(const std::string& type_str);
     void saveRecord(std::ofstream& file, const Record& record, const TableSchema& schema, int& offset);
     Record loadRecord(std::ifstream& file, const TableSchema& schema);
@@ -104,10 +104,7 @@ private:
     void serializeField(std::ofstream& file, const FieldValue& value, const Column& column);
     FieldValue deserializeField(std::ifstream& file, const Column& column);
 
-    // Create index for a table
     void createIndex(const TableSchema& schema);
-
-    // Load existing indexes
     void loadIndexes();
     bool evaluateCondition(
         const Record& record,
@@ -116,7 +113,6 @@ private:
     std::filesystem::path getDatabasePath(const std::string& db_name);
 };
 
-// Helper function for evaluating a single condition
 bool evaluateSingleCondition(const Record& record, const std::string& column, const std::string& op, const FieldValue& value);
 
 #endif

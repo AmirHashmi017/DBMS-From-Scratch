@@ -41,6 +41,9 @@ struct Query {
     std::vector<Condition> conditions;
     std::vector<std::string> condition_operators;
     std::vector<std::string> select_columns; // Added for SELECT column selection
+    // Join-related fields
+    std::string join_table_name;
+    Condition join_condition;
 };
 
 class QueryParser {
