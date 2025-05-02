@@ -1,0 +1,24 @@
+        CREATE DATABASE skylines;
+        USE skylines;
+
+        CREATE TABLE users (id INT, name STRING(50), age INT, PRIMARY KEY (id));
+        CREATE TABLE products (product_id Int, description String(100), price FLOAT, in_stock BOOL, PRIMARY KEY (product_id));
+        CREATE TABLE orders (order_id INT, user_id INT, product_id INT, PRIMARY KEY (order_id), FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (product_id) REFERENCES products(product_id));
+        DROP TABLE users;
+
+        INSERT INTO users VALUES (1, 'John Doe', 30);
+        INSERT INTO users VALUES (2, 'Jane Smith', 25)
+        INSERT INTO users VALUES (3, 'Bob Johnson', 40);
+        SELECT * FROM users;
+        SELECT * FROM users WHERE age > 25;
+        SELECT * FROM users WHERE age > 20 AND name LIKE 'John';
+        SELECT * FROM users WHERE age < 20 OR name LIKE 'John';
+        SELECT id,name FROM users WHERE NOT age > 30 ;
+        UPDATE users SET name = 'John Smith' WHERE id = 1;
+        DELETE FROM users WHERE age < 30;
+        INSERT INTO products VALUES (1, 'Laptop', 999.99, true);
+        INSERT INTO products VALUES (2, 'Phone', 499.99, false);
+        INSERT INTO orders VALUES (1, 1, 1);  
+        SELECT users.name,orders.order_id FROM users JOIN orders ON users.id = orders.user_id;
+
+        DROP DATABASE skylines;

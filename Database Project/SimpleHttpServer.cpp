@@ -4,9 +4,10 @@
 #include "../third_party/json.hpp"
 #include "query_parser.h"
 
+using namespace std;
 using json = nlohmann::json;
 
-SimpleHttpServer::SimpleHttpServer(DatabaseManager& dbManager, const std::string& address, unsigned short port)
+SimpleHttpServer::SimpleHttpServer(DatabaseManager& dbManager, const string& address, unsigned short port)
     : dbManager(dbManager), acceptor(ioc), running(false) {
     
     tcp::endpoint endpoint(net::ip::make_address(address), port);
@@ -22,8 +23,8 @@ SimpleHttpServer::~SimpleHttpServer() {
 
 void SimpleHttpServer::start() {
     running = true;
-    serverThread = std::thread(&SimpleHttpServer::run, this);
-    std::cout << "HTTP Server listening on port " << acceptor.local_endpoint().port() << std::endl;
+    serverThread = thread(&SimpleHttpServer::run, this);
+    cout << "HTTP Server listening on port " << acceptor.local_endpoint().port() << endl;
 }
 
 void SimpleHttpServer::stop() {
@@ -40,13 +41,13 @@ void SimpleHttpServer::run() {
 }
 
 void SimpleHttpServer::startAccept() {
-    auto socket = std::make_shared<tcp::socket>(ioc);
+    auto socket = make_shared<tcp::socket>(ioc);
     acceptor.async_accept(*socket, [this, socket](boost::system::error_code ec) {
         if (!ec) {
             beast::flat_buffer buffer;
             http::request<http::string_body> req;
             http::read(*socket, buffer, req);
-            handleRequest(std::move(req), *socket);
+            handleRequest(move(req), *socket);
         }
         if (running) {
             startAccept();
@@ -64,7 +65,7 @@ void SimpleHttpServer::handleRequest(http::request<http::string_body>&& req, tcp
         if (req.method() == http::verb::post) {
             if (req.target() == "/query") {
                 auto json_data = json::parse(req.body());
-                std::string query = json_data["query"];
+                string query = json_data["query"];
                 
                 // Create a new QueryParser for each request
                 QueryParser parser(dbManager);
@@ -78,7 +79,7 @@ void SimpleHttpServer::handleRequest(http::request<http::string_body>&& req, tcp
                         for (const auto& record : parser.current_query.results) {
                             json record_obj;
                             for (const auto& [key, value] : record) {
-                                std::visit([&](const auto& val) {
+                                visit([&](const auto& val) {
                                     record_obj[key] = val;
                                 }, value);
                             }
@@ -99,7 +100,7 @@ void SimpleHttpServer::handleRequest(http::request<http::string_body>&& req, tcp
             }
             else if (req.target() == "/use-database") {
                 auto json_data = json::parse(req.body());
-                std::string dbName = json_data["database"];
+                string dbName = json_data["database"];
                 
                 bool success = dbManager.useDatabase(dbName);
                 json response;
@@ -132,7 +133,7 @@ void SimpleHttpServer::handleRequest(http::request<http::string_body>&& req, tcp
             }
         }
     }
-    catch (const std::exception& e) {
+    catch (const exception& e) {
         res.result(http::status::internal_server_error);
         json error;
         error["success"] = false;

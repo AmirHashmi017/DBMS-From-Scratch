@@ -7,57 +7,57 @@
 #include <chrono>
 #include "query_parser.h"
 
-// Get the executable path helper function
+using namespace std;
+namespace fs = filesystem;
 
-namespace fs = std::filesystem;
-std::string getExecutablePath() {
+// Get the executable path helper function
+string getExecutablePath() {
 #ifdef _WIN32
     char buffer[MAX_PATH];
     GetModuleFileNameA(NULL, buffer, MAX_PATH);
-    std::string::size_type pos = std::string(buffer).find_last_of("\\/");
-    return std::string(buffer).substr(0, pos);
+    string::size_type pos = string(buffer).find_last_of("\\/");
+    return string(buffer).substr(0, pos);
 #else
     char buffer[PATH_MAX];
     ssize_t count = readlink("/proc/self/exe", buffer, PATH_MAX);
-    return std::string(buffer, (count > 0) ? count : 0).substr(0,
-        std::string(buffer).find_last_of("/"));
+    return string(buffer, (count > 0) ? count : 0).substr(0,
+        string(buffer).find_last_of("/"));
 #endif
 }
 
-DatabaseManager::DatabaseManager(const std::string& catalog_path_rel) {
+DatabaseManager::DatabaseManager(const string& catalog_path_rel) {
     try {
         // Initialize current database as empty
         this->current_database.clear();
 
         // Set up the database directory
-        std::filesystem::path dataDir = "db_data";
-        if (!std::filesystem::exists(dataDir)) {
-            std::filesystem::create_directories(dataDir);
+        filesystem::path dataDir = "db_data";
+        if (!filesystem::exists(dataDir)) {
+            filesystem::create_directories(dataDir);
         }
 
         // Set absolute path for catalog
-        this->catalog_path = (dataDir / std::filesystem::path(catalog_path_rel).filename()).string();
-        std::cout << "Using catalog path: " << this->catalog_path << std::endl;
+        this->catalog_path = (dataDir / filesystem::path(catalog_path_rel).filename()).string();
+        cout << "Using catalog path: " << this->catalog_path << endl;
 
         // Load the catalog if it exists
-        if (std::filesystem::exists(this->catalog_path)) {
+        if (filesystem::exists(this->catalog_path)) {
             catalog.load(this->catalog_path);
         }
 
         // Load existing indexes
         loadIndexes();
     }
-    catch (const std::filesystem::filesystem_error& e) {
-        std::cerr << "Filesystem error in constructor: " << e.what() << std::endl;
-        std::cerr << "Path: " << e.path1() << std::endl;
+    catch (const filesystem::filesystem_error& e) {
+        cerr << "Filesystem error in constructor: " << e.what() << endl;
+        cerr << "Path: " << e.path1() << endl;
         throw;
     }
-    catch (const std::exception& e) {
-        std::cerr << "Error in constructor: " << e.what() << std::endl;
+    catch (const exception& e) {
+        cerr << "Error in constructor: " << e.what() << endl;
         throw;
     }
 }
-
 
 DatabaseManager::~DatabaseManager() {
     // Save catalog
@@ -76,7 +76,7 @@ void ensureWritePermissions(const fs::path& path) {
             fs::perm_options::add);
     }
     catch (const fs::filesystem_error& e) {
-        std::cerr << "Failed to set write permissions for path: " << path << "\nError: " << e.what() << std::endl;
+        cerr << "Failed to set write permissions for path: " << path << "\nError: " << e.what() << endl;
         throw;
     }
 }
@@ -89,82 +89,81 @@ void createDirectoriesWithPermissions(const fs::path& path) {
         ensureWritePermissions(path);
     }
     catch (const fs::filesystem_error& e) {
-        std::cerr << "Error creating directories or setting permissions: " << e.what() << std::endl;
+        cerr << "Error creating directories or setting permissions: " << e.what() << endl;
         throw;
     }
 }
 
-
 bool DatabaseManager::createTable(
-    const std::string& table_name,
-    const std::vector<std::tuple<std::string, std::string, int>>& columns,
-    const std::string& primary_key,
-    const std::map<std::string, std::pair<std::string, std::string>>& foreign_keys) {
+    const string& table_name,
+    const vector<tuple<string, string, int>>& columns,
+    const string& primary_key,
+    const map<string, pair<string, string>>& foreign_keys) {
 
     // Check if database is selected
     if (current_database.empty()) {
-        std::cerr << "Error: No database selected. Use 'USE DATABASE' first." << std::endl;
+        cerr << "Error: No database selected. Use 'USE DATABASE' first." << endl;
         return false;
     }
 
     // Validate table name
     if (table_name.empty()) {
-        std::cerr << "Error: Table name cannot be empty" << std::endl;
+        cerr << "Error: Table name cannot be empty" << endl;
         return false;
     }
 
     // Check for invalid characters in table name
-    if (table_name.find_first_of("\\/:*?\"<>|") != std::string::npos) {
-        std::cerr << "Error: Table name contains invalid characters" << std::endl;
+    if (table_name.find_first_of("\\/:*?\"<>|") != string::npos) {
+        cerr << "Error: Table name contains invalid characters" << endl;
         return false;
     }
 
     // Check if table already exists
     for (const auto& table : catalog.tables) {
         if (table.name == table_name) {
-            std::cerr << "Error: Table '" << table_name << "' already exists" << std::endl;
+            cerr << "Error: Table '" << table_name << "' already exists" << endl;
             return false;
         }
     }
 
     // Validate columns
     if (columns.empty()) {
-        std::cerr << "Error: Table must have at least one column" << std::endl;
+        cerr << "Error: Table must have at least one column" << endl;
         return false;
     }
 
     // Check for duplicate column names
-    std::set<std::string> column_names;
+    set<string> column_names;
     for (const auto& [col_name, col_type, col_length] : columns) {
         if (col_name.empty()) {
-            std::cerr << "Error: Column name cannot be empty" << std::endl;
+            cerr << "Error: Column name cannot be empty" << endl;
             return false;
         }
         if (!column_names.insert(col_name).second) {
-            std::cerr << "Error: Duplicate column name '" << col_name << "'" << std::endl;
+            cerr << "Error: Duplicate column name '" << col_name << "'" << endl;
             return false;
         }
     }
 
     // Validate primary key
     if (primary_key.empty()) {
-        std::cerr << "Error: Primary key cannot be empty" << std::endl;
+        cerr << "Error: Primary key cannot be empty" << endl;
         return false;
     }
     if (column_names.find(primary_key) == column_names.end()) {
-        std::cerr << "Error: Primary key column '" << primary_key << "' does not exist" << std::endl;
+        cerr << "Error: Primary key column '" << primary_key << "' does not exist" << endl;
         return false;
     }
 
     // Validate foreign keys
     for (const auto& [fk_col, ref] : foreign_keys) {
         if (column_names.find(fk_col) == column_names.end()) {
-            std::cerr << "Error: Foreign key column '" << fk_col << "' does not exist" << std::endl;
+            cerr << "Error: Foreign key column '" << fk_col << "' does not exist" << endl;
             return false;
         }
         const auto& [ref_table, ref_column] = ref;
         if (ref_table.empty() || ref_column.empty()) {
-            std::cerr << "Error: Invalid reference for foreign key '" << fk_col << "'" << std::endl;
+            cerr << "Error: Invalid reference for foreign key '" << fk_col << "'" << endl;
             return false;
         }
     }
@@ -181,13 +180,13 @@ bool DatabaseManager::createTable(
         
         // Validate column type
         if (column.type == Column::UNKNOWN) {
-            std::cerr << "Error: Invalid column type '" << col_type << "' for column '" << col_name << "'" << std::endl;
+            cerr << "Error: Invalid column type '" << col_type << "' for column '" << col_name << "'" << endl;
             return false;
         }
 
         // Validate length for string/char types
         if ((column.type == Column::STRING || column.type == Column::CHAR) && col_length <= 0) {
-            std::cerr << "Error: Invalid length for column '" << col_name << "'" << std::endl;
+            cerr << "Error: Invalid length for column '" << col_name << "'" << endl;
             return false;
         }
         column.length = col_length;
@@ -205,7 +204,7 @@ bool DatabaseManager::createTable(
     }
 
     // Create data and index file paths
-    std::filesystem::path baseDir = std::filesystem::path(catalog_path).parent_path();
+    filesystem::path baseDir = filesystem::path(catalog_path).parent_path();
     table.data_file_path = (baseDir / (table_name + ".dat")).string();
     table.index_file_path = (baseDir / (table_name + ".idx")).string();
 
@@ -235,13 +234,13 @@ void DatabaseManager::createIndex(const TableSchema& schema) {
     }
 
     if (!found) {
-        std::cerr << "No primary key found for table '" << schema.name << "'" << std::endl;
+        cerr << "No primary key found for table '" << schema.name << "'" << endl;
         return;
     }
 
     // Make sure the directory exists
-    std::filesystem::path indexPath(schema.index_file_path);
-    std::filesystem::create_directories(indexPath.parent_path());
+    filesystem::path indexPath(schema.index_file_path);
+    filesystem::create_directories(indexPath.parent_path());
 
     // Create B+ tree index
     auto* index = new BPlusTree(schema.index_file_path);
@@ -250,21 +249,20 @@ void DatabaseManager::createIndex(const TableSchema& schema) {
 
 void DatabaseManager::loadIndexes() {
     for (const auto& table : catalog.tables) {
-        std::cout << "Loading index for table " << table.name << " from " << table.index_file_path << std::endl;
-        if (std::filesystem::exists(table.index_file_path)) {
+        cout << "Loading index for table " << table.name << " from " << table.index_file_path << endl;
+        if (filesystem::exists(table.index_file_path)) {
             auto* index = new BPlusTree(table.index_file_path);
             indexes[table.name] = index;
         } else {
-            std::cout << "Index file does not exist: " << table.index_file_path << std::endl;
+            cout << "Index file does not exist: " << table.index_file_path << endl;
         }
     }
 }
 
-
-bool DatabaseManager::insertRecord(const std::string& table_name, const Record& record) {
+bool DatabaseManager::insertRecord(const string& table_name, const Record& record) {
     // Validate table name
     if (table_name.empty()) {
-        std::cerr << "Error: Table name cannot be empty" << std::endl;
+        cerr << "Error: Table name cannot be empty" << endl;
         return false;
     }
 
@@ -279,7 +277,7 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
         }
     }
     if (!found) {
-        std::cerr << "Error: Table '" << table_name << "' not found" << std::endl;
+        cerr << "Error: Table '" << table_name << "' not found" << endl;
         return false;
     }
 
@@ -287,7 +285,7 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
     for (const auto& column : schema.columns) {
         if (column.is_primary_key || column.is_foreign_key) {
             if (record.find(column.name) == record.end()) {
-                std::cerr << "Error: Required column '" << column.name << "' is missing from record" << std::endl;
+                cerr << "Error: Required column '" << column.name << "' is missing from record" << endl;
                 return false;
             }
         }
@@ -300,21 +298,21 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
             if (column.name == col_name) {
                 column_found = true;
                 // Check if value type matches column type
-                if ((column.type == Column::INT && !std::holds_alternative<int>(value)) ||
-                    (column.type == Column::FLOAT && !std::holds_alternative<float>(value)) ||
-                    (column.type == Column::STRING && !std::holds_alternative<std::string>(value)) ||
-                    (column.type == Column::CHAR && !std::holds_alternative<std::string>(value)) ||
-                    (column.type == Column::BOOL && !std::holds_alternative<bool>(value))) {
-                    std::cerr << "Error: Invalid data type for column '" << col_name << "'" << std::endl;
+                if ((column.type == Column::INT && !holds_alternative<int>(value)) ||
+                    (column.type == Column::FLOAT && !holds_alternative<float>(value)) ||
+                    (column.type == Column::STRING && !holds_alternative<string>(value)) ||
+                    (column.type == Column::CHAR && !holds_alternative<string>(value)) ||
+                    (column.type == Column::BOOL && !holds_alternative<bool>(value))) {
+                    cerr << "Error: Invalid data type for column '" << col_name << "'" << endl;
                     return false;
                 }
                 
                 // Check string length for STRING and CHAR types
                 if ((column.type == Column::STRING || column.type == Column::CHAR) && 
-                    std::holds_alternative<std::string>(value)) {
-                    const std::string& str_value = std::get<std::string>(value);
+                    holds_alternative<string>(value)) {
+                    const string& str_value = get<string>(value);
                     if (str_value.length() > static_cast<size_t>(column.length)) {
-                        std::cerr << "Error: String length exceeds maximum length for column '" << col_name << "'" << std::endl;
+                        cerr << "Error: String length exceeds maximum length for column '" << col_name << "'" << endl;
                         return false;
                     }
                 }
@@ -322,26 +320,26 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
             }
         }
         if (!column_found) {
-            std::cerr << "Error: Column '" << col_name << "' does not exist in table '" << table_name << "'" << std::endl;
+            cerr << "Error: Column '" << col_name << "' does not exist in table '" << table_name << "'" << endl;
             return false;
         }
     }
 
     // Get the primary key value
     int primary_key_value = 0;
-    std::string primary_key_column;
+    string primary_key_column;
     for (const auto& column : schema.columns) {
         if (column.is_primary_key) {
             primary_key_column = column.name;
             if (record.find(primary_key_column) == record.end()) {
-                std::cerr << "Record is missing primary key '" << primary_key_column << "'" << std::endl;
+                cerr << "Record is missing primary key '" << primary_key_column << "'" << endl;
                 return false;
             }
             if (column.type == Column::INT) {
-                primary_key_value = std::get<int>(record.at(primary_key_column));
+                primary_key_value = get<int>(record.at(primary_key_column));
             }
             else {
-                std::cerr << "Primary key must be an integer" << std::endl;
+                cerr << "Primary key must be an integer" << endl;
                 return false;
             }
             break;
@@ -352,7 +350,7 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
     if (indexes.find(table_name) != indexes.end()) {
         auto existing_offsets = indexes[table_name]->search(primary_key_value);
         if (!existing_offsets.empty()) {
-            std::cerr << "Error: Primary key value " << primary_key_value << " already exists in table '" << table_name << "'" << std::endl;
+            cerr << "Error: Primary key value " << primary_key_value << " already exists in table '" << table_name << "'" << endl;
             return false;
         }
     }
@@ -362,7 +360,7 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
         if (column.is_foreign_key) {
             // Get the foreign key value
             if (record.find(column.name) == record.end()) {
-                std::cerr << "Record is missing foreign key '" << column.name << "'" << std::endl;
+                cerr << "Record is missing foreign key '" << column.name << "'" << endl;
                 return false;
             }
 
@@ -377,17 +375,17 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
                 }
             }
             if (!ref_found) {
-                std::cerr << "Referenced table '" << column.references_table << "' not found for foreign key '" << column.name << "'" << std::endl;
+                cerr << "Referenced table '" << column.references_table << "' not found for foreign key '" << column.name << "'" << endl;
                 return false;
             }
 
             // Get the foreign key value
             int foreign_key_value = 0;
             if (column.type == Column::INT) {
-                foreign_key_value = std::get<int>(record.at(column.name));
+                foreign_key_value = get<int>(record.at(column.name));
             }
             else {
-                std::cerr << "Foreign key must be an integer" << std::endl;
+                cerr << "Foreign key must be an integer" << endl;
                 return false;
             }
 
@@ -395,12 +393,12 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
             if (indexes.find(column.references_table) != indexes.end()) {
                 auto ref_offsets = indexes[column.references_table]->search(foreign_key_value);
                 if (ref_offsets.empty()) {
-                    std::cerr << "Foreign key value " << foreign_key_value << " not found in referenced table '" << column.references_table << "'" << std::endl;
+                    cerr << "Foreign key value " << foreign_key_value << " not found in referenced table '" << column.references_table << "'" << endl;
                     return false;
                 }
             }
             else {
-                std::cerr << "No index found for referenced table '" << column.references_table << "'" << std::endl;
+                cerr << "No index found for referenced table '" << column.references_table << "'" << endl;
                 return false;
             }
         }
@@ -412,13 +410,13 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
     }
 
     // Make sure directories exist
-    std::filesystem::path dataFilePath(schema.data_file_path);
-    std::filesystem::create_directories(dataFilePath.parent_path());
+    filesystem::path dataFilePath(schema.data_file_path);
+    filesystem::create_directories(dataFilePath.parent_path());
 
     // Open data file in appropriate mode
-    std::ofstream data_file(schema.data_file_path, std::ios::binary | std::ios::app);
+    ofstream data_file(schema.data_file_path, ios::binary | ios::app);
     if (!data_file) {
-        std::cerr << "Failed to open data file: " << schema.data_file_path << std::endl;
+        cerr << "Failed to open data file: " << schema.data_file_path << endl;
         return false;
     }
 
@@ -434,7 +432,7 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
         indexes[table_name]->insert(primary_key_value, offset);
     }
     else {
-        std::cerr << "Index creation failed for table " << table_name << std::endl;
+        cerr << "Index creation failed for table " << table_name << endl;
         return false;
     }
 
@@ -442,22 +440,22 @@ bool DatabaseManager::insertRecord(const std::string& table_name, const Record& 
 }
 
 // Best combined implementation of serializeField
-void DatabaseManager::serializeField(std::ofstream& file, const FieldValue& value, const Column& column) {
+void DatabaseManager::serializeField(ofstream& file, const FieldValue& value, const Column& column) {
     switch (column.type) {
     case Column::INT: {
-        int val = std::get<int>(value);
+        int val = get<int>(value);
         file.write(reinterpret_cast<const char*>(&val), sizeof(val));
         break;
     }
     case Column::FLOAT: {
-        float val = std::get<float>(value);
+        float val = get<float>(value);
         file.write(reinterpret_cast<const char*>(&val), sizeof(val));
         break;
     }
     case Column::STRING: {
-        std::string val;
-        if (std::holds_alternative<std::string>(value)) {
-            val = std::get<std::string>(value);
+        string val;
+        if (holds_alternative<string>(value)) {
+            val = get<string>(value);
         }
         // No truncation - length check is done in insertRecord
         int len = val.size();
@@ -466,16 +464,16 @@ void DatabaseManager::serializeField(std::ofstream& file, const FieldValue& valu
         break;
     }
     case Column::CHAR: {
-        std::string val;
-        if (std::holds_alternative<std::string>(value)) {
-            val = std::get<std::string>(value);
+        string val;
+        if (holds_alternative<string>(value)) {
+            val = get<string>(value);
         }
         // No truncation - length check is done in insertRecord
         file.write(val.c_str(), column.length);
         break;
     }
     case Column::BOOL: {
-        bool val = std::get<bool>(value);
+        bool val = get<bool>(value);
         file.write(reinterpret_cast<const char*>(&val), sizeof(val));
         break;
     }
@@ -483,7 +481,7 @@ void DatabaseManager::serializeField(std::ofstream& file, const FieldValue& valu
 }
 
 // Best combined implementation of deserializeField
-FieldValue DatabaseManager::deserializeField(std::ifstream& file, const Column& column) {
+FieldValue DatabaseManager::deserializeField(ifstream& file, const Column& column) {
     switch (column.type) {
     case Column::INT: {
         int val;
@@ -498,21 +496,21 @@ FieldValue DatabaseManager::deserializeField(std::ifstream& file, const Column& 
     case Column::STRING: {
         int len;
         file.read(reinterpret_cast<char*>(&len), sizeof(len));
-        std::string val(len, '\0');
+        string val(len, '\0');
         file.read(&val[0], len);
         // Trim null characters
         size_t nullPos = val.find('\0');
-        if (nullPos != std::string::npos) {
+        if (nullPos != string::npos) {
             val = val.substr(0, nullPos);
         }
         return val;
     }
     case Column::CHAR: {
-        std::string val(column.length, '\0');
+        string val(column.length, '\0');
         file.read(&val[0], column.length);
         // Trim null characters
         size_t nullPos = val.find('\0');
-        if (nullPos != std::string::npos) {
+        if (nullPos != string::npos) {
             val = val.substr(0, nullPos);
         }
         return val;
@@ -527,8 +525,8 @@ FieldValue DatabaseManager::deserializeField(std::ifstream& file, const Column& 
     }
 }
 
-std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name, const std::string& key_column, const FieldValue& key_value) {
-    std::vector<Record> results;
+vector<Record> DatabaseManager::searchRecords(const string& table_name, const string& key_column, const FieldValue& key_value) {
+    vector<Record> results;
 
     // Find the table
     TableSchema schema;
@@ -543,7 +541,7 @@ std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name
     }
 
     if (!found) {
-        std::cerr << "Table '" << table_name << "' not found" << std::endl;
+        cerr << "Table '" << table_name << "' not found" << endl;
         return results;
     }
 
@@ -557,21 +555,21 @@ std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name
     }
 
     // Check if data file exists
-    if (!std::filesystem::exists(schema.data_file_path)) {
-        std::cerr << "Data file not found: " << schema.data_file_path << std::endl;
+    if (!filesystem::exists(schema.data_file_path)) {
+        cerr << "Data file not found: " << schema.data_file_path << endl;
         return results;
     }
 
     // Open data file for reading
-    std::ifstream data_file(schema.data_file_path, std::ios::binary);
+    ifstream data_file(schema.data_file_path, ios::binary);
     if (!data_file) {
-        std::cerr << "Failed to open data file: " << schema.data_file_path << std::endl;
+        cerr << "Failed to open data file: " << schema.data_file_path << endl;
         return results;
     }
 
     // If searching by primary key and index exists, use it
     if (is_primary_key && indexes.find(table_name) != indexes.end()) {
-        int key_int = std::get<int>(key_value);
+        int key_int = get<int>(key_value);
         auto offsets = indexes[table_name]->search(key_int);
 
         for (int offset : offsets) {
@@ -581,7 +579,7 @@ std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name
     }
     else {
         // Sequential scan
-        data_file.seekg(0, std::ios::end);
+        data_file.seekg(0, ios::end);
         size_t file_size = data_file.tellg();
         data_file.seekg(0);
 
@@ -599,15 +597,15 @@ std::vector<Record> DatabaseManager::searchRecords(const std::string& table_name
     return results;
 }
 
-std::vector<std::string> DatabaseManager::listTables() const {
-    std::vector<std::string> table_names;
+vector<string> DatabaseManager::listTables() const {
+    vector<string> table_names;
     for (const auto& table : catalog.tables) {
         table_names.push_back(table.name);
     }
     return table_names;
 }
 
-TableSchema DatabaseManager::getTableSchema(const std::string& table_name) const {
+TableSchema DatabaseManager::getTableSchema(const string& table_name) const {
     for (const auto& table : catalog.tables) {
         if (table.name == table_name) {
             return table;
@@ -616,7 +614,7 @@ TableSchema DatabaseManager::getTableSchema(const std::string& table_name) const
     return TableSchema(); // Empty schema if not found
 }
 
-Column::Type DatabaseManager::stringToColumnType(const std::string& type_str) {
+Column::Type DatabaseManager::stringToColumnType(const string& type_str) {
     if (type_str == "INT") return Column::INT;
     if (type_str == "FLOAT") return Column::FLOAT;
     if (type_str == "STRING") return Column::STRING;
@@ -624,11 +622,11 @@ Column::Type DatabaseManager::stringToColumnType(const std::string& type_str) {
     if (type_str == "BOOL") return Column::BOOL;
 
     // Default to string
-    std::cerr << "Unknown type '" << type_str << "', defaulting to STRING" << std::endl;
+    cerr << "Unknown type '" << type_str << "', defaulting to STRING" << endl;
     return Column::STRING;
 }
 
-void DatabaseManager::saveRecord(std::ofstream& file, const Record& record, const TableSchema& schema, int& offset) {
+void DatabaseManager::saveRecord(ofstream& file, const Record& record, const TableSchema& schema, int& offset) {
     // Store current position as record start
     offset = file.tellp();
 
@@ -644,7 +642,7 @@ void DatabaseManager::saveRecord(std::ofstream& file, const Record& record, cons
             case Column::INT: default_value = 0; break;
             case Column::FLOAT: default_value = 0.0f; break;
             case Column::STRING:
-            case Column::CHAR: default_value = std::string(""); break;
+            case Column::CHAR: default_value = string(""); break;
             case Column::BOOL: default_value = false; break;
             }
             serializeField(file, default_value, column);
@@ -652,7 +650,7 @@ void DatabaseManager::saveRecord(std::ofstream& file, const Record& record, cons
     }
 }
 
-Record DatabaseManager::loadRecord(std::ifstream& file, const TableSchema& schema) {
+Record DatabaseManager::loadRecord(ifstream& file, const TableSchema& schema) {
     Record record;
 
     for (const auto& column : schema.columns) {
@@ -673,9 +671,8 @@ int DatabaseManager::getFieldSize(const Column& column) const {
     }
 }
 
-
-std::vector<Record> DatabaseManager::getAllRecords(const std::string& table_name) {
-    std::vector<Record> results;
+vector<Record> DatabaseManager::getAllRecords(const string& table_name) {
+    vector<Record> results;
 
     // Find the table schema
     TableSchema schema;
@@ -690,25 +687,25 @@ std::vector<Record> DatabaseManager::getAllRecords(const std::string& table_name
     }
 
     if (!found) {
-        std::cerr << "Table '" << table_name << "' not found" << std::endl;
+        cerr << "Table '" << table_name << "' not found" << endl;
         return results;
     }
 
     // Check if data file exists
-    if (!std::filesystem::exists(schema.data_file_path)) {
-        std::cerr << "Data file not found: " << schema.data_file_path << std::endl;
+    if (!filesystem::exists(schema.data_file_path)) {
+        cerr << "Data file not found: " << schema.data_file_path << endl;
         return results;
     }
 
     // Open data file for reading
-    std::ifstream data_file(schema.data_file_path, std::ios::binary);
+    ifstream data_file(schema.data_file_path, ios::binary);
     if (!data_file) {
-        std::cerr << "Failed to open data file: " << schema.data_file_path << std::endl;
+        cerr << "Failed to open data file: " << schema.data_file_path << endl;
         return results;
     }
 
     // Read all records from the data file
-    data_file.seekg(0, std::ios::end);
+    data_file.seekg(0, ios::end);
     size_t file_size = data_file.tellg();
     data_file.seekg(0);
 
@@ -718,9 +715,8 @@ std::vector<Record> DatabaseManager::getAllRecords(const std::string& table_name
 
     return results;
 }
-// Add these implementations at the end of DatabaseManager.cpp
 
-bool evaluateSingleCondition(const Record& record, const std::string& column, const std::string& op, const FieldValue& value) {
+bool evaluateSingleCondition(const Record& record, const string& column, const string& op, const FieldValue& value) {
     if (record.find(column) == record.end()) {
         return false;
     }
@@ -735,41 +731,41 @@ bool evaluateSingleCondition(const Record& record, const std::string& column, co
         return record_value != value;
     }
     else if (op == ">") {
-        if (std::holds_alternative<int>(record_value) && std::holds_alternative<int>(value)) {
-            return std::get<int>(record_value) > std::get<int>(value);
+        if (holds_alternative<int>(record_value) && holds_alternative<int>(value)) {
+            return get<int>(record_value) > get<int>(value);
         }
-        else if (std::holds_alternative<float>(record_value) && std::holds_alternative<float>(value)) {
-            return std::get<float>(record_value) > std::get<float>(value);
+        else if (holds_alternative<float>(record_value) && holds_alternative<float>(value)) {
+            return get<float>(record_value) > get<float>(value);
         }
         // Could add string comparison for lexicographic ordering if needed
     }
     else if (op == "<") {
-        if (std::holds_alternative<int>(record_value) && std::holds_alternative<int>(value)) {
-            return std::get<int>(record_value) < std::get<int>(value);
+        if (holds_alternative<int>(record_value) && holds_alternative<int>(value)) {
+            return get<int>(record_value) < get<int>(value);
         }
-        else if (std::holds_alternative<float>(record_value) && std::holds_alternative<float>(value)) {
-            return std::get<float>(record_value) < std::get<float>(value);
+        else if (holds_alternative<float>(record_value) && holds_alternative<float>(value)) {
+            return get<float>(record_value) < get<float>(value);
         }
     }
     else if (op == ">=") {
-        if (std::holds_alternative<int>(record_value) && std::holds_alternative<int>(value)) {
-            return std::get<int>(record_value) >= std::get<int>(value);
+        if (holds_alternative<int>(record_value) && holds_alternative<int>(value)) {
+            return get<int>(record_value) >= get<int>(value);
         }
-        else if (std::holds_alternative<float>(record_value) && std::holds_alternative<float>(value)) {
-            return std::get<float>(record_value) >= std::get<float>(value);
+        else if (holds_alternative<float>(record_value) && holds_alternative<float>(value)) {
+            return get<float>(record_value) >= get<float>(value);
         }
     }
     else if (op == "<=") {
-        if (std::holds_alternative<int>(record_value) && std::holds_alternative<int>(value)) {
-            return std::get<int>(record_value) <= std::get<int>(value);
+        if (holds_alternative<int>(record_value) && holds_alternative<int>(value)) {
+            return get<int>(record_value) <= get<int>(value);
         }
-        else if (std::holds_alternative<float>(record_value) && std::holds_alternative<float>(value)) {
-            return std::get<float>(record_value) <= std::get<float>(value);
+        else if (holds_alternative<float>(record_value) && holds_alternative<float>(value)) {
+            return get<float>(record_value) <= get<float>(value);
         }
     }
-    else if (op == "LIKE" && std::holds_alternative<std::string>(record_value) && std::holds_alternative<std::string>(value)) {
+    else if (op == "LIKE" && holds_alternative<string>(record_value) && holds_alternative<string>(value)) {
         // Simple LIKE implementation - could be extended for patterns
-        return std::get<std::string>(record_value).find(std::get<std::string>(value)) != std::string::npos;
+        return get<string>(record_value).find(get<string>(value)) != string::npos;
     }
 
     return false;
@@ -777,8 +773,8 @@ bool evaluateSingleCondition(const Record& record, const std::string& column, co
 
 bool DatabaseManager::evaluateCondition(
     const Record& record,
-    const std::vector<std::tuple<std::string, std::string, FieldValue>>& conditions,
-    const std::vector<std::string>& operators) {
+    const vector<tuple<string, string, FieldValue>>& conditions,
+    const vector<string>& operators) {
 
     if (conditions.empty()) {
         return true; // No conditions means all records match
@@ -792,16 +788,16 @@ bool DatabaseManager::evaluateCondition(
         // Check for NOT operator
         if (op_index < operators.size() && operators[op_index] == "NOT") {
             apply_not = true;
-            std::cerr << "Applying operator: NOT" << std::endl;
+            cerr << "Applying operator: NOT" << endl;
             op_index++;
         }
 
         // Evaluate the current condition
         bool cond_result = evaluateSingleCondition(
             record,
-            std::get<0>(conditions[i]),
-            std::get<1>(conditions[i]),
-            std::get<2>(conditions[i])
+            get<0>(conditions[i]),
+            get<1>(conditions[i]),
+            get<2>(conditions[i])
         );
 
         // Apply NOT if specified
@@ -810,40 +806,40 @@ bool DatabaseManager::evaluateCondition(
             apply_not = false;
         }
 
-        std::cerr << "Evaluated condition " << i + 1 << ": " << (cond_result ? "true" : "false") << std::endl;
+        cerr << "Evaluated condition " << i + 1 << ": " << (cond_result ? "true" : "false") << endl;
 
         // Combine with previous result
         if (i == 0) {
             result = cond_result;
         } else {
             if (op_index >= operators.size()) {
-                std::cerr << "Error: Missing operator for condition " << i + 1 << std::endl;
+                cerr << "Error: Missing operator for condition " << i + 1 << endl;
                 return false;
             }
-            const std::string& op = operators[op_index];
-            std::cerr << "Applying operator: " << op << std::endl;
+            const string& op = operators[op_index];
+            cerr << "Applying operator: " << op << endl;
             if (op == "AND") {
                 result = result && cond_result;
             } else if (op == "OR") {
                 result = result || cond_result;
             } else {
-                std::cerr << "Error: Invalid operator '" << op << "'" << std::endl;
+                cerr << "Error: Invalid operator '" << op << "'" << endl;
                 return false;
             }
             op_index++;
         }
     }
 
-    std::cerr << "Final condition result: " << (result ? "true" : "false") << std::endl;
+    cerr << "Final condition result: " << (result ? "true" : "false") << endl;
     return result;
 }
 
-std::vector<Record> DatabaseManager::searchRecordsWithFilter(
-    const std::string& table_name,
-    const std::vector<std::tuple<std::string, std::string, FieldValue>>& conditions,
-    const std::vector<std::string>& operators) {
+vector<Record> DatabaseManager::searchRecordsWithFilter(
+    const string& table_name,
+    const vector<tuple<string, string, FieldValue>>& conditions,
+    const vector<string>& operators) {
 
-    std::vector<Record> results;
+    vector<Record> results;
 
     // Find the table schema
     TableSchema schema;
@@ -857,25 +853,25 @@ std::vector<Record> DatabaseManager::searchRecordsWithFilter(
     }
 
     if (!found) {
-        std::cerr << "Table '" << table_name << "' not found" << std::endl;
+        cerr << "Table '" << table_name << "' not found" << endl;
         return results;
     }
 
     // Check if data file exists
-    if (!std::filesystem::exists(schema.data_file_path)) {
-        std::cerr << "Data file not found: " << schema.data_file_path << std::endl;
+    if (!filesystem::exists(schema.data_file_path)) {
+        cerr << "Data file not found: " << schema.data_file_path << endl;
         return results;
     }
 
     // Open data file for reading
-    std::ifstream data_file(schema.data_file_path, std::ios::binary);
+    ifstream data_file(schema.data_file_path, ios::binary);
     if (!data_file) {
-        std::cerr << "Failed to open data file: " << schema.data_file_path << std::endl;
+        cerr << "Failed to open data file: " << schema.data_file_path << endl;
         return results;
     }
 
     // Read all records and apply filter
-    data_file.seekg(0, std::ios::end);
+    data_file.seekg(0, ios::end);
     size_t file_size = data_file.tellg();
     data_file.seekg(0);
 
@@ -892,10 +888,10 @@ std::vector<Record> DatabaseManager::searchRecordsWithFilter(
 }
 
 bool DatabaseManager::updateRecordsWithFilter(
-    const std::string& table_name,
-    const std::map<std::string, FieldValue>& update_values,
-    const std::vector<std::tuple<std::string, std::string, FieldValue>>& conditions,
-    const std::vector<std::string>& operators) {
+    const string& table_name,
+    const map<string, FieldValue>& update_values,
+    const vector<tuple<string, string, FieldValue>>& conditions,
+    const vector<string>& operators) {
 
     // Find the table schema
     TableSchema schema;
@@ -909,37 +905,37 @@ bool DatabaseManager::updateRecordsWithFilter(
     }
 
     if (!found) {
-        std::cerr << "Table '" << table_name << "' not found" << std::endl;
+        cerr << "Table '" << table_name << "' not found" << endl;
         return false;
     }
 
     // Check if data file exists
-    if (!std::filesystem::exists(schema.data_file_path)) {
-        std::cerr << "Data file not found: " << schema.data_file_path << std::endl;
+    if (!filesystem::exists(schema.data_file_path)) {
+        cerr << "Data file not found: " << schema.data_file_path << endl;
         return false;
     }
 
     // First, read all records and identify which ones need to be updated
-    std::ifstream read_file(schema.data_file_path, std::ios::binary);
+    ifstream read_file(schema.data_file_path, ios::binary);
     if (!read_file) {
-        std::cerr << "Failed to open data file: " << schema.data_file_path << std::endl;
+        cerr << "Failed to open data file: " << schema.data_file_path << endl;
         return false;
     }
 
     // Create a temporary file for the updated data
-    std::string temp_file_path = schema.data_file_path + ".tmp";
-    std::ofstream write_file(temp_file_path, std::ios::binary);
+    string temp_file_path = schema.data_file_path + ".tmp";
+    ofstream write_file(temp_file_path, ios::binary);
     if (!write_file) {
-        std::cerr << "Failed to create temporary file" << std::endl;
+        cerr << "Failed to create temporary file" << endl;
         return false;
     }
 
-    read_file.seekg(0, std::ios::end);
+    read_file.seekg(0, ios::end);
     size_t file_size = read_file.tellg();
     read_file.seekg(0);
 
     // Track record offsets for updating the index
-    std::map<int, int> updated_offsets; // original_offset -> new_offset
+    map<int, int> updated_offsets; // original_offset -> new_offset
     int records_updated = 0;
     int record_index = 0;
 
@@ -969,7 +965,7 @@ bool DatabaseManager::updateRecordsWithFilter(
             // Find primary key
             for (const auto& column : schema.columns) {
                 if (column.is_primary_key && column.type == Column::INT) {
-                    int pk_value = std::get<int>(updated_record[column.name]);
+                    int pk_value = get<int>(updated_record[column.name]);
                     updated_offsets[pk_value] = new_offset;
                     break;
                 }
@@ -983,7 +979,7 @@ bool DatabaseManager::updateRecordsWithFilter(
     write_file.close();
 
     // Replace the original file with the temporary file
-    std::filesystem::rename(temp_file_path, schema.data_file_path);
+    filesystem::rename(temp_file_path, schema.data_file_path);
 
     // Update the index with the new record offsets
     if (!updated_offsets.empty() && indexes.find(table_name) != indexes.end()) {
@@ -993,14 +989,14 @@ bool DatabaseManager::updateRecordsWithFilter(
         }
     }
 
-    std::cout << "Updated " << records_updated << " records" << std::endl;
+    cerr << "Updated " << records_updated << " records" << endl;
     return true;
 }
 
 int DatabaseManager::deleteRecordsWithFilter(
-    const std::string& table_name,
-    const std::vector<std::tuple<std::string, std::string, FieldValue>>& conditions,
-    const std::vector<std::string>& operators) {
+    const string& table_name,
+    const vector<tuple<string, string, FieldValue>>& conditions,
+    const vector<string>& operators) {
 
     // Find the table schema
     TableSchema schema;
@@ -1014,38 +1010,38 @@ int DatabaseManager::deleteRecordsWithFilter(
     }
 
     if (!found) {
-        std::cerr << "Table '" << table_name << "' not found" << std::endl;
+        cerr << "Table '" << table_name << "' not found" << endl;
         return 0;
     }
 
     // Check if data file exists
-    if (!std::filesystem::exists(schema.data_file_path)) {
-        std::cerr << "Data file not found: " << schema.data_file_path << std::endl;
+    if (!filesystem::exists(schema.data_file_path)) {
+        cerr << "Data file not found: " << schema.data_file_path << endl;
         return 0;
     }
 
     // First, read all records and identify which ones need to be kept
-    std::ifstream read_file(schema.data_file_path, std::ios::binary);
+    ifstream read_file(schema.data_file_path, ios::binary);
     if (!read_file) {
-        std::cerr << "Failed to open data file: " << schema.data_file_path << std::endl;
+        cerr << "Failed to open data file: " << schema.data_file_path << endl;
         return 0;
     }
 
     // Create a temporary file that will contain only the kept records
-    std::string temp_file_path = schema.data_file_path + ".tmp";
-    std::ofstream write_file(temp_file_path, std::ios::binary);
+    string temp_file_path = schema.data_file_path + ".tmp";
+    ofstream write_file(temp_file_path, ios::binary);
     if (!write_file) {
-        std::cerr << "Failed to create temporary file" << std::endl;
+        cerr << "Failed to create temporary file" << endl;
         return 0;
     }
 
-    read_file.seekg(0, std::ios::end);
+    read_file.seekg(0, ios::end);
     size_t file_size = read_file.tellg();
     read_file.seekg(0);
 
     // Track deleted record primary keys for updating the index
-    std::vector<int> deleted_keys;
-    std::map<int, int> kept_records; // primary_key -> new_offset
+    vector<int> deleted_keys;
+    map<int, int> kept_records; // primary_key -> new_offset
     int records_deleted = 0;
 
     while (read_file.tellg() < file_size && read_file.good()) {
@@ -1059,7 +1055,7 @@ int DatabaseManager::deleteRecordsWithFilter(
         int primary_key_value = -1;
         for (const auto& column : schema.columns) {
             if (column.is_primary_key && column.type == Column::INT) {
-                primary_key_value = std::get<int>(record[column.name]);
+                primary_key_value = get<int>(record[column.name]);
                 break;
             }
         }
@@ -1087,7 +1083,7 @@ int DatabaseManager::deleteRecordsWithFilter(
     write_file.close();
 
     // Replace the original file with the temporary file
-    std::filesystem::rename(temp_file_path, schema.data_file_path);
+    filesystem::rename(temp_file_path, schema.data_file_path);
 
     // Rebuild the index with the kept records
     if (indexes.find(table_name) != indexes.end() && !kept_records.empty()) {
@@ -1105,55 +1101,55 @@ int DatabaseManager::deleteRecordsWithFilter(
         indexes[table_name] = new_index;
     }
 
-    std::cout << "Deleted " << records_deleted << " records" << std::endl;
+    cerr << "Deleted " << records_deleted << " records" << endl;
     return records_deleted;
 }
 
-std::vector<Record> DatabaseManager::joinTables(
-    const std::string& table1_name,
-    const std::string& table2_name,
+vector<Record> DatabaseManager::joinTables(
+    const string& table1_name,
+    const string& table2_name,
     const Condition& join_condition,
-    const std::vector<std::tuple<std::string, std::string, FieldValue>>& where_conditions,
-    const std::vector<std::string>& where_operators) {
+    const vector<tuple<string, string, FieldValue>>& where_conditions,
+    const vector<string>& where_operators) {
     
-    std::vector<Record> results;
+    vector<Record> results;
     
-   TableSchema schema1, schema2;
-bool found1 = false, found2 = false;
-for (const auto& table : catalog.tables) {
-    if (table.name == table1_name) {
-        schema1 = table;
-        found1 = true;
-    } else if (table.name == table2_name) {
-        schema2 = table;
-        found2 = true;
+    TableSchema schema1, schema2;
+    bool found1 = false, found2 = false;
+    for (const auto& table : catalog.tables) {
+        if (table.name == table1_name) {
+            schema1 = table;
+            found1 = true;
+        } else if (table.name == table2_name) {
+            schema2 = table;
+            found2 = true;
+        }
     }
-}
     
     if (!found1) {
-        std::cerr << "Table '" << table1_name << "' not found" << std::endl;
+        cerr << "Table '" << table1_name << "' not found" << endl;
         return results;
     }
     if (!found2) {
-        std::cerr << "Table '" << table2_name << "' not found" << std::endl;
+        cerr << "Table '" << table2_name << "' not found" << endl;
         return results;
     }
     
     // Get all records from both tables
-    std::vector<Record> records1 = getAllRecords(table1_name);
-    std::vector<Record> records2 = getAllRecords(table2_name);
+    vector<Record> records1 = getAllRecords(table1_name);
+    vector<Record> records2 = getAllRecords(table2_name);
     
     // Extract join condition columns
-    std::string left_col = join_condition.column; // e.g., users.id
-    std::string right_col = std::holds_alternative<std::string>(join_condition.value)
-        ? std::get<std::string>(join_condition.value) // e.g., orders.user_id
+    string left_col = join_condition.column; // e.g., users.id
+    string right_col = holds_alternative<string>(join_condition.value)
+        ? get<string>(join_condition.value) // e.g., orders.user_id
         : "";
     
     // Validate join condition columns
-    std::string left_table = left_col.substr(0, left_col.find('.'));
-    std::string left_col_name = left_col.substr(left_col.find('.') + 1);
-    std::string right_table = right_col.substr(0, right_col.find('.'));
-    std::string right_col_name = right_col.substr(right_col.find('.') + 1);
+    string left_table = left_col.substr(0, left_col.find('.'));
+    string left_col_name = left_col.substr(left_col.find('.') + 1);
+    string right_table = right_col.substr(0, right_col.find('.'));
+    string right_col_name = right_col.substr(right_col.find('.') + 1);
     
     bool left_valid = false, right_valid = false;
     for (const auto& col : schema1.columns) {
@@ -1170,7 +1166,7 @@ for (const auto& table : catalog.tables) {
     }
     
     if (!left_valid || !right_valid) {
-        std::cerr << "Error: Invalid join condition columns: " << left_col << " = " << right_col << std::endl;
+        cerr << "Error: Invalid join condition columns: " << left_col << " = " << right_col << endl;
         return results;
     }
     
@@ -1198,77 +1194,77 @@ for (const auto& table : catalog.tables) {
         }
     }
     
-    std::cout << "Joined " << results.size() << " records" << std::endl;
+    cerr << "Joined " << results.size() << " records" << endl;
     return results;
 }
 
-bool DatabaseManager::createDatabase(const std::string& db_name) {
+bool DatabaseManager::createDatabase(const string& db_name) {
     try {
-        std::filesystem::path dbDir = getDatabasePath(db_name);
-        std::cout << "Creating database at path: " << dbDir << std::endl;
+        filesystem::path dbDir = getDatabasePath(db_name);
+        cerr << "Creating database at path: " << dbDir << endl;
 
-        if (std::filesystem::exists(dbDir)) {
-            std::cerr << "Database '" << db_name << "' already exists at: " << dbDir << std::endl;
+        if (filesystem::exists(dbDir)) {
+            cerr << "Database '" << db_name << "' already exists at: " << dbDir << endl;
             return false;
         }
 
         // Create the database directory
-        if (!std::filesystem::create_directories(dbDir)) {
-            std::cerr << "Failed to create database directory at: " << dbDir << std::endl;
+        if (!filesystem::create_directories(dbDir)) {
+            cerr << "Failed to create database directory at: " << dbDir << endl;
             return false;
         }
 
         // Create catalog file
-        std::filesystem::path catalogPath = dbDir / "catalog.bin";
-        std::ofstream catalog_file(catalogPath, std::ios::binary);
+        filesystem::path catalogPath = dbDir / "catalog.bin";
+        ofstream catalog_file(catalogPath, ios::binary);
         if (!catalog_file.is_open()) {
-            std::cerr << "Failed to create catalog file at: " << catalogPath << std::endl;
+            cerr << "Failed to create catalog file at: " << catalogPath << endl;
             return false;
         }
         catalog_file.close();
 
-        std::cout << "Successfully created database '" << db_name << "'" << std::endl;
+        cerr << "Successfully created database '" << db_name << "'" << endl;
         return true;
     }
-    catch (const std::filesystem::filesystem_error& e) {
-        std::cerr << "Filesystem error in createDatabase: " << e.what() << std::endl;
+    catch (const filesystem::filesystem_error& e) {
+        cerr << "Filesystem error in createDatabase: " << e.what() << endl;
         return false;
     }
-    catch (const std::exception& e) {
-        std::cerr << "Error creating database: " << e.what() << std::endl;
+    catch (const exception& e) {
+        cerr << "Error creating database: " << e.what() << endl;
         return false;
     }
 }
 
-std::filesystem::path DatabaseManager::getDatabasePath(const std::string& db_name) {
+filesystem::path DatabaseManager::getDatabasePath(const string& db_name) {
     try {
         // Use the same db_data directory as in constructor
-        std::filesystem::path dataDir = "db_data";
+        filesystem::path dataDir = "db_data";
         
         // Create the data directory if it doesn't exist
-        if (!std::filesystem::exists(dataDir)) {
-            std::filesystem::create_directories(dataDir);
+        if (!filesystem::exists(dataDir)) {
+            filesystem::create_directories(dataDir);
         }
         
         // Return the database path without creating it
         return dataDir / db_name;
     }
-    catch (const std::filesystem::filesystem_error& e) {
-        std::cerr << "Filesystem error in getDatabasePath: " << e.what() << std::endl;
-        std::cerr << "Path: " << e.path1() << std::endl;
+    catch (const filesystem::filesystem_error& e) {
+        cerr << "Filesystem error in getDatabasePath: " << e.what() << endl;
+        cerr << "Path: " << e.path1() << endl;
         throw;
     }
-    catch (const std::exception& e) {
-        std::cerr << "Error in getDatabasePath: " << e.what() << std::endl;
+    catch (const exception& e) {
+        cerr << "Error in getDatabasePath: " << e.what() << endl;
         throw;
     }
 }
 
-bool DatabaseManager::dropDatabase(const std::string& db_name) {
-    std::filesystem::path dbDir = getDatabasePath(db_name);
+bool DatabaseManager::dropDatabase(const string& db_name) {
+    filesystem::path dbDir = getDatabasePath(db_name);
 
-    if (!std::filesystem::exists(dbDir)) {
-        std::cerr << "Database '" << db_name << "' does not exist." << std::endl;
+    if (!filesystem::exists(dbDir)) {
+        cerr << "Database '" << db_name << "' does not exist." << endl;
         return false;
     }
 
@@ -1282,29 +1278,26 @@ bool DatabaseManager::dropDatabase(const std::string& db_name) {
 
     try {
         // Remove all files and subdirectories
-        std::filesystem::remove_all(dbDir);
+        filesystem::remove_all(dbDir);
         return true;
     }
-    catch (const std::filesystem::filesystem_error& e) {
-        std::cerr << "Error dropping database: " << e.what() << std::endl;
+    catch (const filesystem::filesystem_error& e) {
+        cerr << "Error dropping database: " << e.what() << endl;
         return false;
     }
 }
 
-
-
-
-bool DatabaseManager::useDatabase(const std::string& db_name) {
+bool DatabaseManager::useDatabase(const string& db_name) {
     // Check if already using this database
     if (current_database == db_name) {
-        std::cout << "Already using database: " << db_name << std::endl;
+        cout << "Already using database: " << db_name << endl;
         return true;
     }
 
     // Validate database exists
-    std::filesystem::path db_path = "db_data/" + db_name;
-    if (!std::filesystem::exists(db_path)) {
-        std::cerr << "Database '" << db_name << "' does not exist." << std::endl;
+    filesystem::path db_path = "db_data/" + db_name;
+    if (!filesystem::exists(db_path)) {
+        cerr << "Database '" << db_name << "' does not exist." << endl;
         return false;
     }
 
@@ -1321,18 +1314,18 @@ bool DatabaseManager::useDatabase(const std::string& db_name) {
     current_database = db_name;
     catalog_path = (db_path / "catalog.bin").string(); // Convert path to string
     catalog.load(catalog_path);
-    std::cout << "Switching to database: " << db_name << std::endl;
+    cout << "Switching to database: " << db_name << endl;
 
     // Load indexes
     loadIndexes();
-    std::cout << "Loaded indexes for database: " << db_name << std::endl;
+    cout << "Loaded indexes for database: " << db_name << endl;
 
     return true;
 }
 
-bool DatabaseManager::dropTable(const std::string& table_name) {
+bool DatabaseManager::dropTable(const string& table_name) {
     if (current_database.empty()) {
-        std::cerr << "No database selected. Use 'USE DATABASE' first." << std::endl;
+        cerr << "No database selected. Use 'USE DATABASE' first." << endl;
         return false;
     }
 
@@ -1348,12 +1341,12 @@ bool DatabaseManager::dropTable(const std::string& table_name) {
     }
 
     if (!found) {
-        std::cerr << "Table '" << table_name << "' does not exist." << std::endl;
+        cerr << "Table '" << table_name << "' does not exist." << endl;
         return false;
     }
 
     // Save current database
-    std::string saved_database = current_database;
+    string saved_database = current_database;
 
     try {
         // Close and remove the index from memory
@@ -1362,79 +1355,79 @@ bool DatabaseManager::dropTable(const std::string& table_name) {
             it->second->close(); // Close the BPlusTree file handle
             delete it->second;
             indexes.erase(it);
-            std::cout << "Closed and removed index for table: " << table_name << std::endl;
+            cout << "Closed and removed index for table: " << table_name << endl;
         }
 
         // Remove table from catalog first
         if (!catalog.removeTable(table_name)) {
-            std::cerr << "Failed to remove table from catalog." << std::endl;
+            cerr << "Failed to remove table from catalog." << endl;
             current_database = saved_database;
             return false;
         }
 
         // Save the updated catalog
         catalog.save(catalog_path);
-        std::cout << "Catalog updated for table: " << table_name << std::endl;
+        cout << "Catalog updated for table: " << table_name << endl;
 
         // Clear database context to prevent reloading
         current_database.clear(); // Temporarily "unuse" database
         indexes.clear(); // Ensure no indexes remain active
-        std::cout << "Cleared database context for table: " << table_name << std::endl;
+        cout << "Cleared database context for table: " << table_name << endl;
 
         // Delete the table's data file
-        std::error_code ec;
-        if (std::filesystem::exists(schema.data_file_path)) {
+        error_code ec;
+        if (filesystem::exists(schema.data_file_path)) {
             ensureWritePermissions(schema.data_file_path);
-            if (!std::filesystem::remove(schema.data_file_path, ec)) {
-                std::cerr << "Failed to delete data file: " << ec.message() << std::endl;
+            if (!filesystem::remove(schema.data_file_path, ec)) {
+                cerr << "Failed to delete data file: " << ec.message() << endl;
                 current_database = saved_database;
                 return false;
             }
-            std::cout << "Deleted data file: " << schema.data_file_path << std::endl;
+            cout << "Deleted data file: " << schema.data_file_path << endl;
         } else {
-            std::cout << "Data file does not exist: " << schema.data_file_path << std::endl;
+            cout << "Data file does not exist: " << schema.data_file_path << endl;
         }
 
         // Delete the table's index file with delay
-        if (std::filesystem::exists(schema.index_file_path)) {
+        if (filesystem::exists(schema.index_file_path)) {
             ensureWritePermissions(schema.index_file_path);
-            std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Wait for handle release
-            if (!std::filesystem::remove(schema.index_file_path, ec)) {
-                std::cerr << "Failed to delete index file: " << ec.message() << std::endl;
+            this_thread::sleep_for(chrono::milliseconds(100)); // Wait for handle release
+            if (!filesystem::remove(schema.index_file_path, ec)) {
+                cerr << "Failed to delete index file: " << ec.message() << endl;
                 current_database = saved_database;
                 return false;
             }
-            std::cout << "Deleted index file: " << schema.index_file_path << std::endl;
+            cout << "Deleted index file: " << schema.index_file_path << endl;
         } else {
-            std::cout << "Index file does not exist: " << schema.index_file_path << std::endl;
+            cout << "Index file does not exist: " << schema.index_file_path << endl;
         }
 
         // Restore database context without reloading indexes
         current_database = saved_database;
-        std::cout << "Restored database context: " << current_database << std::endl;
+        cout << "Restored database context: " << current_database << endl;
 
         return true;
-    } catch (const std::filesystem::filesystem_error& e) {
-        std::cerr << "Filesystem error in dropTable: " << e.what() << std::endl;
-        std::cerr << "Path: " << e.path1() << std::endl;
+    } catch (const filesystem::filesystem_error& e) {
+        cerr << "Filesystem error in dropTable: " << e.what() << endl;
+        cerr << "Path: " << e.path1() << endl;
         current_database = saved_database;
         return false;
-    } catch (const std::exception& e) {
-        std::cerr << "Unexpected error in dropTable: " << e.what() << std::endl;
+    } catch (const exception& e) {
+        cerr << "Unexpected error in dropTable: " << e.what() << endl;
         current_database = saved_database;
         return false;
     }
 }
 
-std::vector<std::string> DatabaseManager::listDatabases() const {
-    std::vector<std::string> databases;
-    std::filesystem::path dataDir = "db_data";
+vector<string> DatabaseManager::listDatabases() const {
+    vector<string> databases;
+    filesystem::path dataDir = "db_data";
 
-    if (!std::filesystem::exists(dataDir)) {
+    if (!filesystem::exists(dataDir)) {
         return databases;
     }
 
-    for (const auto& entry : std::filesystem::directory_iterator(dataDir)) {
+    for (const auto& entry : filesystem::directory_iterator(dataDir)) {
         if (entry.is_directory()) {
             databases.push_back(entry.path().filename().string());
         }
@@ -1443,6 +1436,6 @@ std::vector<std::string> DatabaseManager::listDatabases() const {
     return databases;
 }
 
-std::string DatabaseManager::getCurrentDatabase() const {
+string DatabaseManager::getCurrentDatabase() const {
     return current_database;
 }
