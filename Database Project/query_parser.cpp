@@ -503,86 +503,137 @@ bool QueryParser::parseInsert(const std::vector<std::string>& tokens) {
         std::cerr << "Error: Invalid INSERT syntax" << std::endl;
         return false;
     }
-    
+
     current_query.type = QueryType::INSERT;
     current_query.table_name = tokens[2];
-    
+
     // Parse values
     std::map<std::string, FieldValue> values;
-    bool in_parentheses = false;
     int value_index = 0;
-    
+
     // Get table schema to map values to column names
     TableSchema schema = db_manager.getTableSchema(current_query.table_name);
     if (schema.name.empty()) {
         std::cerr << "Error: Table '" << current_query.table_name << "' does not exist" << std::endl;
         return false;
     }
-    
-    for (size_t i = 5; i < tokens.size(); i++) {
+
+    // Start parsing after VALUES keyword
+    size_t i = 4; // Should point to '(' after VALUES
+    if (tokens[i] != "(") {
+        std::cerr << "Error: Expected '(' after VALUES" << std::endl;
+        return false;
+    }
+    i++; // Skip '('
+
+    std::vector<std::string> value_tokens;
+    bool in_quotes = false;
+    std::string current_token;
+
+    // Collect value tokens, preserving quoted strings
+    while (i < tokens.size() && tokens[i] != ")") {
         std::string token = tokens[i];
-        
-        if (token == "(") {
-            in_parentheses = true;
-            continue;
-        }
-        if (token == ")") {
-            in_parentheses = false;
-            continue;
-        }
-        
-        if (in_parentheses && token != ",") {
-            if (value_index >= schema.columns.size()) {
-                std::cerr << "Error: Too many values for table '" << current_query.table_name << "'" << std::endl;
-                return false;
+
+        if (token == "," && !in_quotes) {
+            if (!current_token.empty()) {
+                value_tokens.push_back(current_token);
+                current_token.clear();
             }
-            
-            const std::string& column_name = schema.columns[value_index].name;
-            Column::Type column_type = schema.columns[value_index].type;
-            
-            try {
-                switch (column_type) {
-                    case Column::INT: {
-                        int int_val = std::stoi(token);
-                        values[column_name] = int_val;
-                        break;
-                    }
-                    case Column::FLOAT: {
-                        float float_val = std::stof(token);
-                        values[column_name] = float_val;
-                        break;
-                    }
-                    case Column::STRING:
-                    case Column::CHAR: {
-                        std::string str_val = token;
-                        if (str_val.front() == '\'' && str_val.back() == '\'') {
-                            str_val = str_val.substr(1, str_val.length() - 2);
-                        }
-                        values[column_name] = str_val;
-                        break;
-                    }
-                    case Column::BOOL: {
-                        bool bool_val = (token == "true" || token == "TRUE" || token == "1");
-                        values[column_name] = bool_val;
-                        break;
-                    }
+            i++;
+            continue;
+        }
+
+        if (token == "'" && !in_quotes) {
+            in_quotes = true;
+            current_token += token;
+            i++;
+            continue;
+        }
+
+        if (token == "'" && in_quotes) {
+            in_quotes = false;
+            current_token += token;
+            i++;
+            continue;
+        }
+
+        current_token += token;
+        if (!in_quotes && i + 1 < tokens.size() && tokens[i + 1] != "," && tokens[i + 1] != ")") {
+            current_token += " ";
+        }
+        i++;
+    }
+
+    if (!current_token.empty()) {
+        value_tokens.push_back(current_token);
+    }
+
+    if (i >= tokens.size() || tokens[i] != ")") {
+        std::cerr << "Error: Expected ')' after values" << std::endl;
+        return false;
+    }
+
+    // Debug: Print value tokens
+    std::cout << "Value tokens: ";
+    for (const auto& vt : value_tokens) {
+        std::cout << "'" << vt << "' ";
+    }
+    std::cout << std::endl;
+
+    // Parse each value token
+    for (const auto& token : value_tokens) {
+        if (value_index >= schema.columns.size()) {
+            std::cerr << "Error: Too many values for table '" << current_query.table_name << "'" << std::endl;
+            return false;
+        }
+
+        const std::string& column_name = schema.columns[value_index].name;
+        Column::Type column_type = schema.columns[value_index].type;
+
+        try {
+            switch (column_type) {
+            case Column::INT: {
+                int int_val = std::stoi(token);
+                values[column_name] = int_val;
+                break;
+            }
+            case Column::FLOAT: {
+                float float_val = std::stof(token);
+                values[column_name] = float_val;
+                break;
+            }
+            case Column::STRING:
+            case Column::CHAR: {
+                std::string str_val = token;
+                if (str_val.front() == '\'' && str_val.back() == '\'') {
+                    str_val = str_val.substr(1, str_val.length() - 2);
                 }
-                value_index++;
-            } catch (...) {
-                std::cerr << "Error: Invalid value '" << token << "' for column '" << column_name << "'" << std::endl;
-                return false;
+                values[column_name] = str_val;
+                break;
             }
+            case Column::BOOL: {
+                bool bool_val = (token == "true" || token == "TRUE" || token == "1");
+                values[column_name] = bool_val;
+                break;
+            }
+            }
+            value_index++;
+        }
+        catch (...) {
+            std::cerr << "Error: Invalid value '" << token << "' for column '" << column_name << "'" << std::endl;
+            return false;
         }
     }
-    
+
     if (value_index != schema.columns.size()) {
         std::cerr << "Error: Incorrect number of values for table '" << current_query.table_name << "'" << std::endl;
         return false;
     }
-    
+
     current_query.values = values;
     return true;
 }
+
 
 bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
     if (tokens.size() < 4) {
@@ -592,7 +643,7 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
     
     current_query.type = QueryType::SELECT;
     
-    // Parse column list
+    // Parse column list  
     size_t from_pos = std::find(tokens.begin(), tokens.end(), "FROM") - tokens.begin();
     if (from_pos == tokens.size()) {
         std::cerr << "Error: Missing FROM clause" << std::endl;
@@ -614,10 +665,11 @@ bool QueryParser::parseSelect(const std::vector<std::string>& tokens) {
             std::transform(token.begin(), token.end(), token.begin(), ::toupper);
             
             if (token == "AND" || token == "OR" || token == "NOT") {
+                std::cerr << token;
                 operators.push_back(token);
                 continue;
             }
-            
+            std::cerr << tokens[i+1];
             Condition cond;
             cond.column = tokens[i];
             cond.op = tokens[i + 1];

@@ -804,14 +804,18 @@ bool DatabaseManager::evaluateCondition(
 
         // Apply the operator between the previous result and this condition
         std::string op = operators[i - 1];
+        std::cerr << "Operator '" << op << "' not found" << std::endl;
         if (op == "AND") {
             result = result && next_result;
+            std::cerr << "AND";
         }
-        else if (op == "OR") {
+        if (op == "OR") {
             result = result || next_result;
+            std::cerr << "OR";
         }
-        else if (op == "NOT") {
+        if (op == "NOT") {
             result = result && !next_result;
+            std::cerr << "NOT";
         }
     }
 
