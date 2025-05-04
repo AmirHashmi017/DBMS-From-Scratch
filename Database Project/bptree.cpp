@@ -1,23 +1,20 @@
 #include "bptree.h"
 #include <iostream>
 
-using namespace std;
-namespace fs = filesystem;
+BPlusTree::BPlusTree(const std::string& index_file) : root_offset(-1), is_closed(false) {
+    std::filesystem::path indexPath(index_file);
+    std::filesystem::create_directories(indexPath.parent_path());
 
-BPlusTree::BPlusTree(const string& index_file) : root_offset(-1), is_closed(false) {
-    fs::path indexPath(index_file);
-    fs::create_directories(indexPath.parent_path());
-
-    file.open(index_file, ios::binary | ios::in | ios::out);
+    file.open(index_file, std::ios::binary | std::ios::in | std::ios::out);
     if (!file) {
-        cout << "Creating new index file: " << index_file << endl;
+        std::cout << "Creating new index file: " << index_file << std::endl;
         file.clear();
-        file.open(index_file, ios::binary | ios::out | ios::trunc);
+        file.open(index_file, std::ios::binary | std::ios::out | std::ios::trunc);
         file.close();
-        file.open(index_file, ios::binary | ios::in | ios::out);
+        file.open(index_file, std::ios::binary | std::ios::in | std::ios::out);
     }
 
-    file.seekg(0, ios::end);
+    file.seekg(0, std::ios::end);
     if (file.tellg() >= sizeof(root_offset)) {
         file.seekg(0);
         file.read(reinterpret_cast<char*>(&root_offset), sizeof(root_offset));
@@ -38,13 +35,13 @@ BPlusNode BPlusTree::get_node(int offset) const {
 
 BPlusNode BPlusTree::read_node(int offset) const {
     if (is_closed) {
-        cerr << "Error: Attempt to read from closed BPlusTree file" << endl;
+        std::cerr << "Error: Attempt to read from closed BPlusTree file" << std::endl;
         return BPlusNode();
     }
     BPlusNode node;
     file.seekg(offset);
     if (!file) {
-        cerr << "Error: Failed to seek to offset " << offset << endl;
+        std::cerr << "Error: Failed to seek to offset " << offset << std::endl;
         file.clear();
         return node;
     }
@@ -54,7 +51,7 @@ BPlusNode BPlusTree::read_node(int offset) const {
     int key_count;
     file.read(reinterpret_cast<char*>(&key_count), sizeof(key_count));
     if (key_count < 0 || key_count > FANOUT) {
-        cerr << "Corrupted key_count at offset " << offset << ": " << key_count << endl;
+        std::cerr << "Corrupted key_count at offset " << offset << ": " << key_count << std::endl;
         file.clear();
         return node;
     }
@@ -72,12 +69,12 @@ BPlusNode BPlusTree::read_node(int offset) const {
 
 void BPlusTree::write_node(int offset, const BPlusNode& node) {
     if (is_closed) {
-        cerr << "Error: Attempt to write to closed BPlusTree file" << endl;
+        std::cerr << "Error: Attempt to write to closed BPlusTree file" << std::endl;
         return;
     }
     file.seekp(offset);
     if (!file) {
-        cerr << "Error: Failed to seek to offset " << offset << endl;
+        std::cerr << "Error: Failed to seek to offset " << offset << std::endl;
         file.clear();
         return;
     }
@@ -104,7 +101,7 @@ void BPlusTree::insert(int key, int data_offset) {
         root.keys.push_back(key);
         root.data_ptrs.push_back(data_offset);
 
-        file.seekp(sizeof(root_offset), ios::beg);  // Skip the root_offset storage
+        file.seekp(sizeof(root_offset), std::ios::beg);  // Skip the root_offset storage
         root_offset = file.tellp();
         write_node(root_offset, root);
 
@@ -113,14 +110,14 @@ void BPlusTree::insert(int key, int data_offset) {
         file.write(reinterpret_cast<const char*>(&root_offset), sizeof(root_offset));
         file.flush();
 
-        cout << "Created root node at offset: " << root_offset << endl;
+        std::cout << "Created root node at offset: " << root_offset << std::endl;
     }
     else {
         // Find the leaf node where the key should be inserted
         int current_offset = root_offset;
         BPlusNode current = read_node(current_offset);
 
-        cout << "Starting search at root offset: " << root_offset << endl;
+        std::cout << "Starting search at root offset: " << root_offset << std::endl;
 
         // Traverse to leaf
         while (!current.is_leaf) {
@@ -128,13 +125,13 @@ void BPlusTree::insert(int key, int data_offset) {
             while (i < current.keys.size() && key > current.keys[i]) {
                 i++;
             }
-            cout << "Moving from node at offset " << current_offset
-                << " to child at index " << i << " (offset " << current.children[i] << ")" << endl;
+            std::cout << "Moving from node at offset " << current_offset
+                << " to child at index " << i << " (offset " << current.children[i] << ")" << std::endl;
             current_offset = current.children[i];
             current = read_node(current_offset);
         }
 
-        cout << "Found leaf node at offset: " << current_offset << endl;
+        std::cout << "Found leaf node at offset: " << current_offset << std::endl;
 
         // Insert the key into the leaf node
         int i = 0;
@@ -144,29 +141,29 @@ void BPlusTree::insert(int key, int data_offset) {
 
         // Check for duplicate key
         if (i < current.keys.size() && current.keys[i] == key) {
-            cout << "Key " << key << " already exists, updating data pointer" << endl;
+            std::cout << "Key " << key << " already exists, updating data pointer" << std::endl;
             current.data_ptrs[i] = data_offset;
         }
         else {
-            cout << "Inserting key " << key << " at position " << i << endl;
+            std::cout << "Inserting key " << key << " at position " << i << std::endl;
             current.keys.insert(current.keys.begin() + i, key);
             current.data_ptrs.insert(current.data_ptrs.begin() + i, data_offset);
         }
 
         // Write the updated node back to the file
         write_node(current_offset, current);
-        cout << "Updated leaf node at offset: " << current_offset << endl;
+        std::cout << "Updated leaf node at offset: " << current_offset << std::endl;
 
         // Check if the node needs to be split
         if (current.keys.size() > FANOUT) {
-            cout << "Node at offset " << current_offset << " needs splitting" << endl;
+            std::cout << "Node at offset " << current_offset << " needs splitting" << std::endl;
             split_node(current, current_offset);
         }
     }
 }
 
 void BPlusTree::split_node(BPlusNode& node, int node_offset) {
-    cout << "Splitting node at offset: " << node_offset << endl;
+    std::cout << "Splitting node at offset: " << node_offset << std::endl;
 
     // Create a new node
     BPlusNode new_node;
@@ -196,96 +193,135 @@ void BPlusTree::split_node(BPlusNode& node, int node_offset) {
     }
 
     // Write new node at the end of the file
-    file.seekp(0, ios::end);
+    file.seekp(0, std::ios::end);
     int new_offset = file.tellp();
     write_node(new_offset, new_node);
-    cout << "Created new node at offset: " << new_offset << endl;
+    std::cout << "Created new node at offset: " << new_offset << std::endl;
 
-    // Update parent node
+    // Update original node
+    write_node(node_offset, node);
+    std::cout << "Updated original node at offset: " << node_offset << std::endl;
+
+    // Update parent pointers for all children of the new node
+    if (!new_node.is_leaf) {
+        for (int child_offset : new_node.children) {
+            BPlusNode child = read_node(child_offset);
+            child.parent = new_offset;
+            write_node(child_offset, child);
+            std::cout << "Updated parent pointer for child at offset " << child_offset << std::endl;
+        }
+    }
+
+    // Handle the parent node creation or update
     if (node.parent == -1) {
-        // Create new root
-        BPlusNode root;
-        root.is_leaf = false;
-        root.parent = -1;
-        root.keys.push_back(promoted_key);
-        root.children.push_back(node_offset);
-        root.children.push_back(new_offset);
+        // This was the root node, create a new root
+        BPlusNode new_root;
+        new_root.is_leaf = false;
+        new_root.parent = -1;
+        new_root.keys.push_back(promoted_key);
+        new_root.children.push_back(node_offset);
+        new_root.children.push_back(new_offset);
 
-        // Write new root at the end of the file
-        file.seekp(0, ios::end);
-        root_offset = file.tellp();
-        write_node(root_offset, root);
+        file.seekp(0, std::ios::end);
+        int new_root_offset = file.tellp();
+        write_node(new_root_offset, new_root);
+        std::cout << "Created new root at offset: " << new_root_offset << std::endl;
 
-        // Update root_offset at the start of the file
+        // Update parent pointers in the split nodes
+        node.parent = new_root_offset;
+        write_node(node_offset, node);
+
+        new_node.parent = new_root_offset;
+        write_node(new_offset, new_node);
+
+        // Update root_offset
+        root_offset = new_root_offset;
         file.seekp(0);
         file.write(reinterpret_cast<const char*>(&root_offset), sizeof(root_offset));
         file.flush();
-
-        cout << "Created new root at offset: " << root_offset << endl;
+        std::cout << "Updated root_offset to: " << root_offset << std::endl;
     }
     else {
-        // Update existing parent
+        // Update the parent node
         BPlusNode parent = read_node(node.parent);
+        std::cout << "Updating parent node at offset: " << node.parent << std::endl;
+
+        // Find where to insert the promoted key
         int i = 0;
         while (i < parent.keys.size() && promoted_key > parent.keys[i]) {
             i++;
         }
 
+        // Insert the promoted key and the new child pointer
         parent.keys.insert(parent.keys.begin() + i, promoted_key);
         parent.children.insert(parent.children.begin() + i + 1, new_offset);
 
+        // Write the updated parent back to the file
         write_node(node.parent, parent);
-        cout << "Updated parent node at offset: " << node.parent << endl;
+        std::cout << "Updated parent node at offset: " << node.parent << std::endl;
 
-        // Check if parent needs splitting
+        // Check if the parent now needs to be split
         if (parent.keys.size() > FANOUT) {
-            cout << "Parent node at offset " << node.parent << " needs splitting" << endl;
+            std::cout << "Parent node needs splitting" << std::endl;
             split_node(parent, node.parent);
         }
     }
-
-    // Update parent pointers
-    node.parent = node.parent == -1 ? root_offset : node.parent;
-    new_node.parent = node.parent;
-    write_node(node_offset, node);
-    write_node(new_offset, new_node);
 }
 
-void BPlusTree::close() {
-    if (!is_closed) {
-        file.close();
-        is_closed = true;
-    }
-}
-
-vector<int> BPlusTree::search(int key) {
-    vector<int> results;
+std::vector<int> BPlusTree::search(int key) {
+    std::vector<int> result;
     if (root_offset == -1) {
-        return results;
+        std::cout << "Tree is empty, returning empty result" << std::endl;
+        return result;
     }
 
     int current_offset = root_offset;
     BPlusNode current = read_node(current_offset);
+    std::cout << "Starting search for key " << key << " at root offset: " << root_offset << std::endl;
 
-    // Traverse to leaf
+    // Find the leaf node that might contain the key
     while (!current.is_leaf) {
         int i = 0;
         while (i < current.keys.size() && key > current.keys[i]) {
             i++;
         }
+        std::cout << "Moving from node at offset " << current_offset
+            << " to child at index " << i << " (offset " << current.children[i] << ")" << std::endl;
         current_offset = current.children[i];
         current = read_node(current_offset);
     }
 
-    // Search in leaf node
-    int i = 0;
-    while (i < current.keys.size() && key > current.keys[i]) {
-        i++;
+    std::cout << "Found leaf node at offset: " << current_offset << std::endl;
+
+    // Search for the key in the leaf node
+    for (size_t i = 0; i < current.keys.size(); i++) {
+        if (current.keys[i] == key) {
+            std::cout << "Found key " << key << " at position " << i << std::endl;
+            result.push_back(current.data_ptrs[i]);
+        }
     }
 
-    if (i < current.keys.size() && current.keys[i] == key) {
-        results.push_back(current.data_ptrs[i]);
+    if (result.empty()) {
+        std::cout << "Key " << key << " not found" << std::endl;
+    }
+    else {
+        std::cout << "Found " << result.size() << " matching records" << std::endl;
     }
 
-    return results;
+    return result;
+}
+void BPlusTree::close() {
+    if (file.is_open() && !is_closed) {
+        file.seekp(0);
+        file.write(reinterpret_cast<const char*>(&root_offset), sizeof(root_offset));
+        file.flush(); // Ensure all writes are committed
+        file.close();
+        is_closed = true;
+        std::cerr << "Closed BPlusTree file at offset: " << root_offset << std::endl;
+        if (file.is_open()) {
+            std::cerr << "Warning: BPlusTree file failed to close" << std::endl;
+        }
+    } else if (is_closed) {
+        std::cerr << "BPlusTree file already closed" << std::endl;
+    }
 }
