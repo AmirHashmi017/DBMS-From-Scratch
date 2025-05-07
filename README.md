@@ -75,6 +75,7 @@ A **high-performance DBMS** built from scratch using **C++ (backend)** and **Rea
    ```bash
    CREATE DATABASE skylines;
    USE skylines;
+   ```
    
 ## Create a table
    ```bash
