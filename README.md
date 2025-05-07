@@ -71,20 +71,20 @@ A **high-performance DBMS** built from scratch using **C++ (backend)** and **Rea
 
 ### 📖 Usage Examples
 
-## Create a Database
+#### Create a Database
    ```bash
    CREATE DATABASE skylines;
    USE skylines;
    ```
    
-## Create a table
+#### Create a table
    ```bash
    CREATE TABLE users (id INT, name STRING(50), age INT, PRIMARY KEY (id));
    CREATE TABLE orders (order_id INT, user_id INT, product_id INT, PRIMARY KEY (order_id), FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (product_id) REFERENCES 
    products(product_id));
    ```
 
-## CRUD Operartions
+#### CRUD Operartions
    ```bash
    INSERT INTO users VALUES (3, 'Bob Johnson', 40);
    UPDATE users SET name = 'John Smith' WHERE id = 1;
@@ -93,13 +93,13 @@ A **high-performance DBMS** built from scratch using **C++ (backend)** and **Rea
    SELECT users.name,orders.order_id FROM users JOIN orders ON users.id = orders.user_id;
    ```
 
-## Drop Database and Table
+#### Drop Database and Table
    ```bash
    DROP TABLE users;
    DROP DATABASE skylines;
    ```
 
-## For more help about queries see file 
+#### For more help about queries see file 
   ```bash
   cd Database Project/Testing Queries.txt
   ```
