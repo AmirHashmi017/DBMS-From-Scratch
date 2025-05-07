@@ -39,5 +39,5 @@ A **high-performance DBMS** built from scratch using **C++ (backend)** and **Rea
 ### Backend Setup
 1. Clone the repo:
    ```bash
-   git clone <repo-url>
-   cd <repo-name>/backend
+   git clone git@github.com:AmirHashmi017/Database-Project.git
+   cd Database-Project/backend
