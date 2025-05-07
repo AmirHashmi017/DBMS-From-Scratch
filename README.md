@@ -40,4 +40,33 @@ A **high-performance DBMS** built from scratch using **C++ (backend)** and **Rea
 1. Clone the repo:
    ```bash
    git clone git@github.com:AmirHashmi017/Database-Project.git
-   cd Database-Project/backend
+   cd Database Project/Database Project
+2. Build with CMake:
+   ```bash
+   mkdir build
+   cd build
+   cmake ..
+   cmake --build .
+   cd debug
+   ./Database.exe
+
+### Gateway Service Setup
+1. Navigate to the gateway-service directory:
+   ```bash
+   cd Database Project/gateway-service
+2. Install dependencies & run:
+   ```bash
+   npm install
+   node server.js
+
+### Frontend Setup
+1. Navigate to the frontend directory:
+   ```bash
+   cd Database Project/db-frontend
+2. Install dependencies & run:
+   ```bash
+   npm install
+   npm run start
+3. Access the app at http://localhost:3000
+
+
