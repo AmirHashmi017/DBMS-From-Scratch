@@ -21,4 +21,5 @@
         INSERT INTO orders VALUES (1, 1, 1);  
         SELECT users.name,orders.order_id FROM users JOIN orders ON users.id = orders.user_id;
 
+
         DROP DATABASE skylines;
